@@ -1,14 +1,36 @@
 #include "fb.h"
 
-int cfunc(int arg1, int arg2, int arg3) {
-  fb_set_color(11, 13);
+int kmain() {
+  fb_set_color(15, 0);
   fb_clear();
-  unsigned char color = 0;
-  while (1) {
-    fb_set_color(color >> 4, color & 0xF);
-    fb_write("lol!", 4);
-    color += 1;
-  }
+  char str[] =
+    "1 hello, how are you?\n"
+    "2 this is quite an auspicious day.\n"
+    "3 new years eve, in fact!\n"
+    "\n"
+    "\n"
+    "\n"
+    "\n"
+    "\n"
+    "\n"
+    "\n"
+    "\n"
+    "\n"
+    "\n"
+    "\n"
+    "\n"
+    "\n"
+    "\n"
+    "\n"
+    "\n"
+    "\n"
+    "\n"
+    "\n"
+    "\n"
+    "24\n"
+    "25\n"
+    "26 combo breaker!";
+  fb_write(str, sizeof(str));
 
-  return arg1 + 2 * arg2 + 3 * arg3;
+  return 0x42;
 }
