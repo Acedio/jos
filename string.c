@@ -1,6 +1,6 @@
 #include "string.h"
 
-#define INT_MIN 0x80000000
+#define INT_MIN -2147483648
 
 void int_to_dec(int i, char dec_str[12]) {
   int is_negative = i < 0;
