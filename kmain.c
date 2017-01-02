@@ -1,4 +1,6 @@
 #include "fb.h"
+#include "serial.h"
+#include "log.h"
 
 int kmain() {
   fb_set_color(15, 0);
@@ -10,6 +12,10 @@ int kmain() {
     }
     fb_write("\n", 1);
   }
+
+  serial_init();
+  serial_write("lol!!!", 6);
+  LOG(INFO, "help I'm trapped in a log factory.");
 
   return 0x42;
 }
