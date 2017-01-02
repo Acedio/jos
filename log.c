@@ -1,6 +1,7 @@
 #include "log.h"
 
 #include "serial.h"
+#include "string.h"
 
 void log_message(int level, const char* filename, int line, const char* text) {
   switch (level) {
@@ -17,10 +18,11 @@ void log_message(int level, const char* filename, int line, const char* text) {
       serial_puts("UNKNOWN:");
   }
 
-  // TODO: Write int_to_decimal()
-  line += 1;
-
   serial_puts(filename);
+  serial_puts(":");
+  char dec_str[12];
+  int_to_dec(line, dec_str);
+  serial_puts(dec_str);
   serial_puts(":");
   serial_puts(text);
   serial_puts("\n");
