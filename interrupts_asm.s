@@ -103,4 +103,5 @@ load_idt:
   mov     eax, [esp+4]    ; load the address of the IDT into register eax
   lidt    [eax]           ; load the IDT
   int 3
+  int 4
   ret                     ; return to the calling function

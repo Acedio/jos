@@ -1,5 +1,7 @@
 #include "interrupts.h"
 
+#include "fb.h"
+#include "keyboard.h"
 #include "log.h"
 #include "pic8259.h"
 #include "string.h"
@@ -41,9 +43,16 @@ void interrupt_handler(CpuState cpu, StackState stack, unsigned int interrupt) {
   stack.error_code = stack.error_code;
   interrupt = interrupt;
   char dec[12];
-  int_to_dec(interrupt, dec);
+  char c;
   switch (interrupt) {
+    case 0x22:  // keyboard
+      c = GetAscii();
+      fb_write(&c, 1);
+      LOG(INFO, "keyboard");
+      PicAck(0x22);
+      break;
     default:
+      int_to_dec(interrupt, dec);
       LOG(INFO, "interrupt#:");
       LOG(INFO, dec);
   }
