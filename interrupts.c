@@ -1,6 +1,7 @@
 #include "interrupts.h"
 
 #include "log.h"
+#include "pic8259.h"
 #include "string.h"
 
 typedef struct __attribute__((packed)) {
@@ -15,7 +16,7 @@ typedef struct __attribute__((packed)) {
   unsigned short offset_high;
 } InterruptDescriptor;
 
-InterruptDescriptor idt[21];
+InterruptDescriptor idt[48];
 
 typedef struct __attribute__((packed)) {
   unsigned int eax;
@@ -36,10 +37,16 @@ typedef struct __attribute__((packed)) {
 } StackState;
 
 void interrupt_handler(CpuState cpu, StackState stack, unsigned int interrupt) {
-  LOG(INFO, "interrupt!");
   cpu.eax = cpu.eax;
   stack.error_code = stack.error_code;
   interrupt = interrupt;
+  char dec[12];
+  int_to_dec(interrupt, dec);
+  switch (interrupt) {
+    default:
+      LOG(INFO, "interrupt#:");
+      LOG(INFO, dec);
+  }
 }
 
 void populate_interrupt_descriptor(InterruptDescriptor* id, unsigned int fn_addr) {
@@ -75,8 +82,37 @@ extern void interrupt_handler_17();
 extern void interrupt_handler_18();
 extern void interrupt_handler_19();
 extern void interrupt_handler_20();
+extern void interrupt_handler_21();
+extern void interrupt_handler_22();
+extern void interrupt_handler_23();
+extern void interrupt_handler_24();
+extern void interrupt_handler_25();
+extern void interrupt_handler_26();
+extern void interrupt_handler_27();
+extern void interrupt_handler_28();
+extern void interrupt_handler_29();
+extern void interrupt_handler_30();
+extern void interrupt_handler_31();
+extern void interrupt_handler_32();
+extern void interrupt_handler_33();
+extern void interrupt_handler_34();
+extern void interrupt_handler_35();
+extern void interrupt_handler_36();
+extern void interrupt_handler_37();
+extern void interrupt_handler_38();
+extern void interrupt_handler_39();
+extern void interrupt_handler_40();
+extern void interrupt_handler_41();
+extern void interrupt_handler_42();
+extern void interrupt_handler_43();
+extern void interrupt_handler_44();
+extern void interrupt_handler_45();
+extern void interrupt_handler_46();
+extern void interrupt_handler_47();
 
 void init_interrupts() {
+  PicInit();
+
   populate_interrupt_descriptor(&idt[0], (unsigned int)interrupt_handler_0);
   populate_interrupt_descriptor(&idt[1], (unsigned int)interrupt_handler_1);
   populate_interrupt_descriptor(&idt[2], (unsigned int)interrupt_handler_2);
@@ -98,6 +134,33 @@ void init_interrupts() {
   populate_interrupt_descriptor(&idt[18], (unsigned int)interrupt_handler_18);
   populate_interrupt_descriptor(&idt[19], (unsigned int)interrupt_handler_19);
   populate_interrupt_descriptor(&idt[20], (unsigned int)interrupt_handler_20);
+  populate_interrupt_descriptor(&idt[21], (unsigned int)interrupt_handler_21);
+  populate_interrupt_descriptor(&idt[22], (unsigned int)interrupt_handler_22);
+  populate_interrupt_descriptor(&idt[23], (unsigned int)interrupt_handler_23);
+  populate_interrupt_descriptor(&idt[24], (unsigned int)interrupt_handler_24);
+  populate_interrupt_descriptor(&idt[25], (unsigned int)interrupt_handler_25);
+  populate_interrupt_descriptor(&idt[26], (unsigned int)interrupt_handler_26);
+  populate_interrupt_descriptor(&idt[27], (unsigned int)interrupt_handler_27);
+  populate_interrupt_descriptor(&idt[28], (unsigned int)interrupt_handler_28);
+  populate_interrupt_descriptor(&idt[29], (unsigned int)interrupt_handler_29);
+  populate_interrupt_descriptor(&idt[30], (unsigned int)interrupt_handler_30);
+  populate_interrupt_descriptor(&idt[31], (unsigned int)interrupt_handler_31);
+  populate_interrupt_descriptor(&idt[32], (unsigned int)interrupt_handler_32);
+  populate_interrupt_descriptor(&idt[33], (unsigned int)interrupt_handler_33);
+  populate_interrupt_descriptor(&idt[34], (unsigned int)interrupt_handler_34);
+  populate_interrupt_descriptor(&idt[35], (unsigned int)interrupt_handler_35);
+  populate_interrupt_descriptor(&idt[36], (unsigned int)interrupt_handler_36);
+  populate_interrupt_descriptor(&idt[37], (unsigned int)interrupt_handler_37);
+  populate_interrupt_descriptor(&idt[38], (unsigned int)interrupt_handler_38);
+  populate_interrupt_descriptor(&idt[39], (unsigned int)interrupt_handler_39);
+  populate_interrupt_descriptor(&idt[40], (unsigned int)interrupt_handler_40);
+  populate_interrupt_descriptor(&idt[41], (unsigned int)interrupt_handler_41);
+  populate_interrupt_descriptor(&idt[42], (unsigned int)interrupt_handler_42);
+  populate_interrupt_descriptor(&idt[43], (unsigned int)interrupt_handler_43);
+  populate_interrupt_descriptor(&idt[44], (unsigned int)interrupt_handler_44);
+  populate_interrupt_descriptor(&idt[45], (unsigned int)interrupt_handler_45);
+  populate_interrupt_descriptor(&idt[46], (unsigned int)interrupt_handler_46);
+  populate_interrupt_descriptor(&idt[47], (unsigned int)interrupt_handler_47);
 
   char dec[12];
 
