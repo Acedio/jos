@@ -4,7 +4,7 @@
 typedef struct __attribute__((packed)) {
   unsigned short size;  // in bytes, not descriptors
   unsigned int address;
-} GDT;
+} GDTSpec;
 
 // This entire descriptor is stored little endian.
 typedef struct __attribute__((packed)) {
@@ -15,6 +15,6 @@ typedef struct __attribute__((packed)) {
   unsigned char base_31_24;
 } SegmentDescriptor;
 
-void lgdt(GDT* gdt);
+void lgdt(GDTSpec* gdt);
 
 #endif  // GDT_H

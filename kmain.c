@@ -1,10 +1,13 @@
 #include "fb.h"
+#include "interrupts.h"
 #include "log.h"
 #include "segmentation.h"
 #include "serial.h"
 
 int kmain() {
+  serial_init();
   init_segmentation();
+  init_interrupts();
   fb_set_color(15, 0);
   fb_clear();
   for (int y = 0; y < 16; ++y) {
@@ -15,7 +18,6 @@ int kmain() {
     fb_write("\n", 1);
   }
 
-  serial_init();
   serial_write("lol!!!", 6);
   LOG(INFO, "help I'm trapped in a log factory.");
 
