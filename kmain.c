@@ -1,8 +1,10 @@
 #include "fb.h"
-#include "serial.h"
 #include "log.h"
+#include "segmentation.h"
+#include "serial.h"
 
 int kmain() {
+  init_segmentation();
   fb_set_color(15, 0);
   fb_clear();
   for (int y = 0; y < 16; ++y) {
