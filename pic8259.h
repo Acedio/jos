@@ -8,6 +8,8 @@
 
 void PicInit();
 
+void PicSetMask(unsigned char mask1, unsigned char mask2);
+
 void PicAck(unsigned int interrupt);
 
 #endif  // PIC8259_H

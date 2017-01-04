@@ -95,13 +95,20 @@ no_error_code_interrupt_handler 46
 no_error_code_interrupt_handler 47
 
 global  load_idt
-
 ; load_idt - Loads the interrupt descriptor table (IDT).
 ; stack: [esp + 4] the address of the first entry in the IDT
 ;        [esp    ] the return address
 load_idt:
   mov     eax, [esp+4]    ; load the address of the IDT into register eax
   lidt    [eax]           ; load the IDT
-  int 3
-  int 4
   ret                     ; return to the calling function
+
+global cli
+cli:
+  cli ; disable interrupts
+  ret
+
+global sti
+sti:
+  sti ; enable interrupts
+  ret

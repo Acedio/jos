@@ -38,18 +38,18 @@ typedef struct __attribute__((packed)) {
   unsigned int eflags;
 } StackState;
 
-void interrupt_handler(CpuState cpu, StackState stack, unsigned int interrupt) {
+void interrupt_handler(CpuState cpu, unsigned int interrupt, StackState stack) {
   cpu.eax = cpu.eax;
   stack.error_code = stack.error_code;
   interrupt = interrupt;
   char dec[12];
   char c;
   switch (interrupt) {
-    case 0x22:  // keyboard
+    case 0x21:  // keyboard
       c = GetAscii();
       fb_write(&c, 1);
       LOG(INFO, "keyboard");
-      PicAck(0x22);
+      PicAck(0x21);
       break;
     default:
       int_to_dec(interrupt, dec);
@@ -120,7 +120,9 @@ extern void interrupt_handler_46();
 extern void interrupt_handler_47();
 
 void init_interrupts() {
+  cli();  // disable interrupts
   PicInit();
+  PicSetMask(0xFD, 0xFF);
 
   populate_interrupt_descriptor(&idt[0], (unsigned int)interrupt_handler_0);
   populate_interrupt_descriptor(&idt[1], (unsigned int)interrupt_handler_1);
@@ -184,4 +186,5 @@ void init_interrupts() {
   LOG(INFO, dec);
   LOG(INFO, "flush");
   load_idt(&idt_spec);
+  sti();  // enable interrupts
 }

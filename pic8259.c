@@ -1,6 +1,8 @@
 #include "pic8259.h"
 
 #include "io.h"
+#include "log.h"
+#include "string.h"
 
 #define PIC1_BASE    0x20    /* IO base address for master PIC */
 #define PIC2_BASE    0xA0    /* IO base address for slave PIC */
@@ -37,6 +39,14 @@ void PicRemap(int offset1, int offset2)
  
   a1 = inb(PIC1_DATA);                        // save masks
   a2 = inb(PIC2_DATA);
+
+  char dec[12];
+  int_to_dec(a1, dec);
+  LOG(INFO, "mask 1:");
+  LOG(INFO, dec);
+  int_to_dec(a2, dec);
+  LOG(INFO, "mask 2:");
+  LOG(INFO, dec);
  
   outb(PIC1_COMMAND, ICW1_INIT | ICW1_ICW4);  // starts the initialization sequence (in cascade mode)
   outb(PIC2_COMMAND, ICW1_INIT | ICW1_ICW4);
@@ -50,6 +60,11 @@ void PicRemap(int offset1, int offset2)
  
   outb(PIC1_DATA, a1);   // restore saved masks.
   outb(PIC2_DATA, a2);
+}
+
+void PicSetMask(unsigned char mask1, unsigned char mask2) {
+  outb(PIC1_DATA, mask1);
+  outb(PIC2_DATA, mask2);
 }
 
 void PicInit() {

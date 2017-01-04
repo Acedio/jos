@@ -18,7 +18,6 @@ int kmain() {
     fb_write("\n", 1);
   }
 
-  serial_write("lol!!!", 6);
   LOG(INFO, "help I'm trapped in a log factory.");
 
   return 0x42;
