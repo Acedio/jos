@@ -42,17 +42,10 @@ void int_to_hex(unsigned int i, char hex_str[12]) {
   hex_str[11] = 0;
   for (int c = 9; c > 1; --c) {
     char hex_char;
-    switch (i & 0xF) {
-      case 0xA:
-      case 0xB:
-      case 0xC:
-      case 0xD:
-      case 0xE:
-      case 0xF:
-        hex_char = 'A' + ((i & 0xF) - 0xA);
-        break;
-      default:
-        hex_char = '0' + (i & 0xF);
+    if ((i & 0xF) > 0x9) {
+      hex_char = 'A' + ((i & 0xF) - 0xA);
+    } else {
+      hex_char = '0' + (i & 0xF);
     }
     hex_str[c] = hex_char;
     i >>= 4;

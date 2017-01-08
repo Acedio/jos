@@ -27,3 +27,15 @@ void log_message(int level, const char* filename, int line, const char* text) {
   serial_puts(text);
   serial_puts("\n");
 }
+
+void log_int(int level, const char* filename, int line, int i) {
+  char dec[12];
+  int_to_dec(i, dec);
+  log_message(level, filename, line, dec);
+}
+
+void log_hex(int level, const char* filename, int line, unsigned int i) {
+  char hex[12];
+  int_to_hex(i, hex);
+  log_message(level, filename, line, hex);
+}
