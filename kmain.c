@@ -4,19 +4,26 @@
 #include "segmentation.h"
 #include "serial.h"
 
+void logo() {
+  fb_puts("Welcome to\n");
+  fb_puts("   ,--.---.\n");
+  fb_puts(",-|   | __|\n");
+  fb_puts("`_| O |__ |\n");
+  fb_puts("| |___|___|\n");
+  fb_puts("| |\n");
+  fb_puts("|/\n");
+}
+
 int kmain() {
   serial_init();
   init_segmentation();
   init_interrupts();
   fb_set_color(15, 0);
   fb_clear();
-  for (int y = 0; y < 16; ++y) {
-    for (int x = 0; x < 16; ++x) {
-      fb_set_color(x, y);
-      fb_write("Lol!", 4);
-    }
-    fb_write("\n", 1);
-  }
+  fb_set_color(13, 0);
+  logo();
+  fb_set_color(7, 0);
+  fb_puts("\n\njosh@jos $ ");
 
   LOG(INFO, "help I'm trapped in a log factory.");
 

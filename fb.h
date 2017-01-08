@@ -22,3 +22,5 @@ void fb_set_color(unsigned char fg, unsigned char bg);
 void fb_clear();
 
 void fb_write(const char* buf, unsigned int len);
+
+void fb_puts(const char* str);

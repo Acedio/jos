@@ -72,20 +72,34 @@ void fb_clear() {
   fb_move_cursor(0);
 }
 
+void fb_putchar(char c) {
+  unsigned short new_pos;
+  if (c == '\n') {
+    // There has to be a quicker way of doing this :P
+    new_pos = (cursor_pos/FB_WIDTH + 1) * FB_WIDTH;
+  } else {
+    fb_write_cell_internal(cursor_pos, c, fb_color);
+    new_pos = cursor_pos + 1;
+  }
+  if (new_pos >= (FB_WIDTH * FB_HEIGHT)) {
+    shift_up();
+    new_pos -= FB_WIDTH;
+  }
+  fb_move_cursor(new_pos);
+}
+
 void fb_write(const char* buf, unsigned int len) {
   for (unsigned int i = 0; i < len; ++i) {
-    unsigned short new_pos;
-    if (buf[i] == '\n') {
-      // There has to be a quicker way of doing this :P
-      new_pos = (cursor_pos/FB_WIDTH + 1) * FB_WIDTH;
-    } else {
-      fb_write_cell_internal(cursor_pos, buf[i], fb_color);
-      new_pos = cursor_pos + 1;
-    }
-    if (new_pos >= (FB_WIDTH * FB_HEIGHT)) {
-      shift_up();
-      new_pos -= FB_WIDTH;
-    }
-    fb_move_cursor(new_pos);
+    fb_putchar(buf[i]);
+  }
+}
+
+void fb_puts(const char* str) {
+  if (!str) {
+    return;
+  }
+  while (*str) {
+    fb_putchar(*str);
+    ++str;
   }
 }
