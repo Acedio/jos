@@ -2,14 +2,14 @@ OBJECTS = loader.o kmain.o io.o fb.o serial.o log.o string.o segmentation.o gdt.
 CC = gcc
 CFLAGS = -m32 -nostdlib -nostdinc -fno-builtin -fno-stack-protector \
 				 -nostartfiles -nodefaultlibs -Wall -Wextra -Werror -c
-LDFLAGS = -T link.ld -melf_i386
+LDFLAGS = -melf_i386
 AS = nasm
 ASFLAGS = -f elf32
 
 all: kernel.elf
 
-kernel.elf: $(OBJECTS)
-		ld $(LDFLAGS) $(OBJECTS) -o kernel.elf
+kernel.elf: $(OBJECTS) link.ld
+		ld -T link.ld $(LDFLAGS) $(OBJECTS) -o kernel.elf
 
 os.iso: kernel.elf
 		cp kernel.elf iso/boot/kernel.elf

@@ -16,3 +16,9 @@ inb:
     mov dx, [esp + 4]
     in  al, dx
     ret
+
+global magic_bp
+
+magic_bp:
+    xchg bx, bx                                          
+    ret

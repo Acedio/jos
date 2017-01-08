@@ -14,7 +14,8 @@
 #define FB_WIDTH 80
 #define FB_HEIGHT 25
 
-char* fb = (char*)0x000B8000;
+// This address is offset by 0xC0000000 to put it in the upper half
+char* fb = (char*)0xC00B8000;
 
 // TODO: Once we learn how to read back the cursor position, probably remove this.
 // cursor pos refers to cell, so needs to be multiplied by two when indexing into fb.
