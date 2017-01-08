@@ -1,6 +1,7 @@
 #include "fb.h"
 #include "interrupts.h"
 #include "log.h"
+#include "paging.h"
 #include "segmentation.h"
 #include "serial.h"
 
@@ -18,6 +19,7 @@ int kmain() {
   serial_init();
   init_segmentation();
   init_interrupts();
+  init_identity_paging();
   fb_set_color(15, 0);
   fb_clear();
   fb_set_color(13, 0);
