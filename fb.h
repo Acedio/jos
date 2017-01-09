@@ -21,6 +21,8 @@ void fb_set_color(unsigned char fg, unsigned char bg);
 // Clears FB to ' ' in the current color.
 void fb_clear();
 
+void fb_putchar(char c);
+
 void fb_write(const char* buf, unsigned int len);
 
 void fb_puts(const char* str);
