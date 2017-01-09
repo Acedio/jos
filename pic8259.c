@@ -40,14 +40,6 @@ void PicRemap(int offset1, int offset2)
   a1 = inb(PIC1_DATA);                        // save masks
   a2 = inb(PIC2_DATA);
 
-  char dec[12];
-  int_to_dec(a1, dec);
-  LOG(INFO, "mask 1:");
-  LOG(INFO, dec);
-  int_to_dec(a2, dec);
-  LOG(INFO, "mask 2:");
-  LOG(INFO, dec);
- 
   outb(PIC1_COMMAND, ICW1_INIT | ICW1_ICW4);  // starts the initialization sequence (in cascade mode)
   outb(PIC2_COMMAND, ICW1_INIT | ICW1_ICW4);
   outb(PIC1_DATA, offset1);                 // ICW2: Master PIC vector offset

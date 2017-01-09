@@ -48,7 +48,6 @@ void interrupt_handler(CpuState cpu, unsigned int interrupt, StackState stack) {
     case 0x21:  // keyboard
       c = GetAscii();
       fb_write(&c, 1);
-      LOG(INFO, "keyboard");
       PicAck(0x21);
       break;
     default:
@@ -173,18 +172,9 @@ void init_interrupts() {
   populate_interrupt_descriptor(&idt[46], (unsigned int)interrupt_handler_46);
   populate_interrupt_descriptor(&idt[47], (unsigned int)interrupt_handler_47);
 
-  char dec[12];
-
   IDTSpec idt_spec;
   idt_spec.address = (unsigned int)idt;
   idt_spec.size = sizeof(idt);
-  int_to_dec(idt_spec.address, dec);
-  LOG(INFO, "idt_spec.address: ");
-  LOG(INFO, dec);
-  int_to_dec(idt_spec.size, dec);
-  LOG(INFO, "idt_spec.size: ");
-  LOG(INFO, dec);
-  LOG(INFO, "flush");
   load_idt(&idt_spec);
   sti();  // enable interrupts
 }

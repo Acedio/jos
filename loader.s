@@ -1,7 +1,12 @@
-global loader                   ; the entry symbol for ELF
+global _start                   ; the entry symbol for ELF
 
 extern kmain           ; in kmain.c
 extern page_directory  ; in paging_asm.s
+
+extern kernel_physical_start  ; from link.ld
+extern kernel_physical_end
+extern kernel_virtual_start
+extern kernel_virtual_end
 
 MAGIC_NUMBER equ 0x1BADB002     ; define the magic number constant
 FLAGS        equ 0x0            ; multiboot flags
@@ -24,7 +29,7 @@ align 4                         ; the code must be 4 byte aligned
     dd FLAGS                    ; the flags,
     dd CHECKSUM                 ; and the checksum
 
-loader:                         ; the loader label (defined as entry point in linker script)
+_start:                              ; the loader label (defined as entry point in linker script)
     ; First set up bare bones paging, where the 0th and the upper half page frames are pointed at 0.
     lea eax, [page_directory]        ; This is the virtual address
     sub eax, UPPER_HALF_OFFSET       ; so we need to subtract the virtual offset
@@ -57,6 +62,10 @@ loader:                         ; the loader label (defined as entry point in li
                                                 ; stack (end of memory area)
     add  ebx, UPPER_HALF_OFFSET  ; Multiboot header address is in ebx, but is the physical
                                  ; address so we need to translate it to the virtual version.
+    push kernel_virtual_end      ; Push the KernelLocation structure
+    push kernel_virtual_start
+    push kernel_physical_end
+    push kernel_physical_start
     push ebx                     ; Push the address of the multiboot header
     call kmain                   ; start the kernel
 .loop:
