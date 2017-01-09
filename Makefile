@@ -1,7 +1,6 @@
 OBJECTS = loader.o kmain.o io.o fb.o serial.o log.o string.o segmentation.o gdt.o interrupts.o interrupts_asm.o pic8259.o keyboard.o paging.o paging_asm.o
-CC = gcc
-CFLAGS = -m32 -nostdlib -nostdinc -fno-builtin -fno-stack-protector \
-				 -nostartfiles -nodefaultlibs -Wall -Wextra -Werror -c
+CC = i686-elf-gcc
+CFLAGS = -c -std=gnu99 -ffreestanding -Wall -Wextra -Werror
 LDFLAGS = -melf_i386
 AS = nasm
 ASFLAGS = -f elf32

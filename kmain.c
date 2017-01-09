@@ -2,6 +2,7 @@
 #include "interrupts.h"
 #include "io.h"
 #include "log.h"
+#include "multiboot.h"
 #include "paging.h"
 #include "segmentation.h"
 #include "serial.h"
@@ -16,7 +17,7 @@ void logo() {
   fb_puts("|/\n");
 }
 
-int kmain() {
+int kmain(multiboot_info_t* multiboot) {
   serial_init();
   init_segmentation();
   init_interrupts();
@@ -26,6 +27,8 @@ int kmain() {
   logo();
   fb_set_color(7, 0);
   fb_puts("\n\njosh@jos $ ");
+
+  LOG_HEX(INFO, "Flags: ", multiboot->flags);
 
   LOG(INFO, "help I'm trapped in a log factory.");
 

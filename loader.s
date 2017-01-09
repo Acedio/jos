@@ -36,16 +36,16 @@ loader:                         ; the loader label (defined as entry point in li
     sub eax, UPPER_HALF_OFFSET
     mov cr3, eax
 
-    mov ebx, cr4
-    or  ebx, 0x10 ; set PSE for 4GB (4th bit)
-    mov cr4, ebx
+    mov eax, cr4
+    or  eax, 0x10 ; set PSE for 4GB (4th bit)
+    mov cr4, eax
 
-    mov ebx, cr0
-    or  ebx, 0x80000000 ; set PG to enable paging
-    mov cr0, ebx
+    mov eax, cr0
+    or  eax, 0x80000000 ; set PG to enable paging
+    mov cr0, eax
 
-    lea ebx, [higher_half] ; load the address of the label in ebx
-    jmp ebx                ; jump to the label
+    lea eax, [higher_half] ; load the address of the label in eax
+    jmp eax                ; jump to the label
     higher_half:
 
     lea eax, [page_directory] ; No need to correct the virtual address this time
@@ -55,6 +55,9 @@ loader:                         ; the loader label (defined as entry point in li
 
     mov esp, kernel_stack + KERNEL_STACK_SIZE   ; point esp to the start of the
                                                 ; stack (end of memory area)
-    call kmain                  ; start the kernel
+    add  ebx, UPPER_HALF_OFFSET  ; Multiboot header address is in ebx, but is the physical
+                                 ; address so we need to translate it to the virtual version.
+    push ebx                     ; Push the address of the multiboot header
+    call kmain                   ; start the kernel
 .loop:
     jmp .loop                   ; loop forever
