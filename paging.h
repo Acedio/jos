@@ -1,10 +1,20 @@
 #ifndef PAGING_H
 #define PAGING_H
 
+#include "multiboot.h"
+
+typedef struct __attribute__((packed)) {
+  unsigned int kernel_physical_start;
+  unsigned int kernel_physical_end;
+  unsigned int kernel_virtual_start;
+  unsigned int kernel_virtual_end;
+} KernelLocation;
+
 typedef unsigned int PageDirectoryEntry;
+typedef unsigned int PageTableEntry;
 
-void init_paging(const PageDirectoryEntry pd[1024]);
+void init_paging(KernelLocation kernel_location, memory_map_t* memory_map);
 
-void init_identity_paging();
+void map_page(unsigned int virt, unsigned int physical);
 
 #endif  // PAGING_H

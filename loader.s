@@ -2,7 +2,7 @@ global _start                   ; the entry symbol for ELF
 
 extern kmain           ; in kmain.c
 extern page_directory  ; in paging_asm.s
-extern page_table      ; in paging_asm.s
+extern os_page_table   ; in paging_asm.s
 
 extern kernel_physical_start  ; from link.ld
 extern kernel_physical_end
@@ -32,10 +32,9 @@ align 4                         ; the code must be 4 byte aligned
     dd CHECKSUM                 ; and the checksum
 
 _start:                              ; the loader label (defined as entry point in linker script)
-    xchg bx, bx  ; TODO: MAGIC
     ; First set up bare bones paging, where the 0th and the upper half page frames are pointed at 0.
-    lea eax, [page_table]            ; First we need to create the page table
-    sub eax, UPPER_HALF_OFFSET       ; [page_table] is the virtual addr so we need to subtract the virtual offset
+    lea eax, [os_page_table]         ; First we need to create the page table
+    sub eax, UPPER_HALF_OFFSET       ; [os_page_table] is the virtual addr so we need to subtract the virtual offset
     mov ecx, 0x00000003              ; ecx will hold the physical address and PTE options
                                      ; 0x03 makes it a 4kb read/write page
     populate_page_table:
@@ -47,7 +46,7 @@ _start:                              ; the loader label (defined as entry point 
                                      ; TODO: This'll need to change if the kernel goes over 4MB (unlikely :P)
         jl populate_page_table
 
-    lea ecx, [page_table]            ; Load the page table address so we can add it to the page directory
+    lea ecx, [os_page_table]         ; Load the page table address so we can add it to the page directory
     sub ecx, UPPER_HALF_OFFSET
     or  ecx, 0x00000003              ; Set the config bits to say we're pointing at a r/w PTE
 
@@ -82,7 +81,7 @@ _start:                              ; the loader label (defined as entry point 
                                                 ; stack (end of memory area)
     add  ebx, UPPER_HALF_OFFSET  ; Multiboot header address is in ebx, but is the physical
                                  ; address so we need to translate it to the virtual version.
-    push kernel_virtual_end      ; Push the KernelLocation structure
+    push kernel_virtual_end      ; Push the KernelLocation structure (see paging.h)
     push kernel_virtual_start
     push kernel_physical_end
     push kernel_physical_start
