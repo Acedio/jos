@@ -2,6 +2,7 @@ global _start                   ; the entry symbol for ELF
 
 extern kmain           ; in kmain.c
 extern page_directory  ; in paging_asm.s
+extern page_table      ; in paging_asm.s
 
 extern kernel_physical_start  ; from link.ld
 extern kernel_physical_end
@@ -30,12 +31,29 @@ align 4                         ; the code must be 4 byte aligned
     dd CHECKSUM                 ; and the checksum
 
 _start:                              ; the loader label (defined as entry point in linker script)
+    xchg bx, bx  ; TODO: MAGIC
     ; First set up bare bones paging, where the 0th and the upper half page frames are pointed at 0.
-    lea eax, [page_directory]        ; This is the virtual address
-    sub eax, UPPER_HALF_OFFSET       ; so we need to subtract the virtual offset
-    mov [eax], dword 0x00000083      ; Identity map the first page frame. 0x83 = 4 MB r/w page
+    lea eax, [page_table]            ; First we need to create the page table
+    sub eax, UPPER_HALF_OFFSET       ; [page_table] is the virtual addr so we need to subtract the virtual offset
+    mov ecx, 0x00000003              ; ecx will hold the physical address and PTE options
+                                     ; 0x03 makes it a 4kb read/write page
+                                     ; We're starting at 0 and will go through the first 4mb
+    populate_page_table:
+        mov [eax], ecx               ; Add the entry to the page table
+        add eax, 4                   ; Increment our page table entry pointer by 4
+        add ecx, 4096                ; ... and our physical memory pointer/options by 4kb
+        cmp ecx, FOUR_MB_BYTES       ; Continue until we've mapped all 4mb
+        jl populate_page_table
+
+    lea ecx, [page_table]            ; Load the page table address so we can add it to the page dir
+    sub ecx, UPPER_HALF_OFFSET
+    or  ecx, 0x00000003              ; Set the config bits to say we're pointing at a r/w PTE
+
+    lea eax, [page_directory]        ; Now for the page directory
+    sub eax, UPPER_HALF_OFFSET       ; Same thing as the page table, still virtual
+    mov [eax], ecx                   ; Load the address of the page table + options
     add eax, (4 * UPPER_HALF_INDEX)  ; Also for the page frame that the kernel is in
-    mov [eax], dword 0x00000083
+    mov [eax], ecx             
 
     lea eax, [page_directory]        ; Now put the physical address of the PD into cr3
     sub eax, UPPER_HALF_OFFSET

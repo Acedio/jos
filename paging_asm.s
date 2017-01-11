@@ -1,7 +1,12 @@
 section .bss
 align 4096
+
 global page_directory
 page_directory:
+  resb 4096
+
+global page_table
+page_table:
   resb 4096
 
 section .text
