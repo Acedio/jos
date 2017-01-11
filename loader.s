@@ -16,8 +16,9 @@ CHECKSUM     equ -MAGIC_NUMBER  ; calculate the checksum
 
 KERNEL_STACK_SIZE equ 4096
 UPPER_HALF_OFFSET equ 0xC0000000
-FOUR_MB_BYTES     equ 0x400000
-UPPER_HALF_INDEX  equ UPPER_HALF_OFFSET/FOUR_MB_BYTES
+LARGE_PAGE_SIZE   equ 0x400000
+PAGE_SIZE         equ 0x1000
+UPPER_HALF_INDEX  equ UPPER_HALF_OFFSET/LARGE_PAGE_SIZE
 
 section .bss
 align 4
@@ -37,15 +38,16 @@ _start:                              ; the loader label (defined as entry point 
     sub eax, UPPER_HALF_OFFSET       ; [page_table] is the virtual addr so we need to subtract the virtual offset
     mov ecx, 0x00000003              ; ecx will hold the physical address and PTE options
                                      ; 0x03 makes it a 4kb read/write page
-                                     ; We're starting at 0 and will go through the first 4mb
     populate_page_table:
         mov [eax], ecx               ; Add the entry to the page table
-        add eax, 4                   ; Increment our page table entry pointer by 4
-        add ecx, 4096                ; ... and our physical memory pointer/options by 4kb
-        cmp ecx, FOUR_MB_BYTES       ; Continue until we've mapped all 4mb
+        add eax, 4                   ; Increment our page table entry pointer to the next page table entry
+        add ecx, PAGE_SIZE           ; ... and our physical memory pointer/options by 4kb
+        cmp ecx, kernel_physical_end ; Continue until we've mapped through the kernel
+                                     ; The kernel is aligned to pages, so the 12 config bits shouldn't interfere with the CMP
+                                     ; TODO: This'll need to change if the kernel goes over 4MB (unlikely :P)
         jl populate_page_table
 
-    lea ecx, [page_table]            ; Load the page table address so we can add it to the page dir
+    lea ecx, [page_table]            ; Load the page table address so we can add it to the page directory
     sub ecx, UPPER_HALF_OFFSET
     or  ecx, 0x00000003              ; Set the config bits to say we're pointing at a r/w PTE
 
