@@ -1,35 +1,42 @@
 #include "log.h"
 
+#include "fb.h"
 #include "serial.h"
 #include "string.h"
+
+#ifdef LOG_TO_SCREEN
+void (*log_puts)(const char*) = &fb_puts;
+#else
+void (*log_puts)(const char*) = &serial_puts;
+#endif
 
 void log_message_no_newline(int level, const char* filename, int line, const char* text) {
   switch (level) {
     case INFO:
-      serial_puts("INFO:");
+      log_puts("INFO:");
       break;
     case WARNING:
-      serial_puts("WARNING:");
+      log_puts("WARNING:");
       break;
     case ERROR:
-      serial_puts("ERROR:");
+      log_puts("ERROR:");
       break;
     default:
-      serial_puts("UNKNOWN:");
+      log_puts("UNKNOWN:");
   }
 
-  serial_puts(filename);
-  serial_puts(":");
+  log_puts(filename);
+  log_puts(":");
   char dec_str[12];
   int_to_dec(line, dec_str);
-  serial_puts(dec_str);
-  serial_puts(":");
-  serial_puts(text);
+  log_puts(dec_str);
+  log_puts(":");
+  log_puts(text);
 }
 
 void log_message(int level, const char* filename, int line, const char* text) {
   log_message_no_newline(level, filename, line, text);
-  serial_puts("\n");
+  log_puts("\n");
 }
 
 void log_int(int level, const char* filename, int line, const char* text,
@@ -37,8 +44,8 @@ void log_int(int level, const char* filename, int line, const char* text,
   char dec[12];
   int_to_dec(i, dec);
   log_message_no_newline(level, filename, line, text);
-  serial_puts(dec);
-  serial_puts("\n");
+  log_puts(dec);
+  log_puts("\n");
 }
 
 void log_hex(int level, const char* filename, int line, const char* text,
@@ -46,6 +53,6 @@ void log_hex(int level, const char* filename, int line, const char* text,
   char hex[12];
   int_to_hex(i, hex);
   log_message_no_newline(level, filename, line, text);
-  serial_puts(hex);
-  serial_puts("\n");
+  log_puts(hex);
+  log_puts("\n");
 }
