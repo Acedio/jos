@@ -13,7 +13,8 @@ typedef struct __attribute__((packed)) {
 typedef unsigned int PageDirectoryEntry;
 typedef unsigned int PageTableEntry;
 
-void init_paging(KernelLocation kernel_location, memory_map_t* memory_map);
+void init_paging(multiboot_info_t* multiboot_info,
+                 KernelLocation kernel_location);
 
 void map_page(unsigned int virt, unsigned int physical);
 

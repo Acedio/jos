@@ -66,6 +66,7 @@ int kmain(multiboot_info_t* multiboot, KernelLocation kernel_location) {
   serial_init();
   init_segmentation();
   init_interrupts();
+  init_paging(multiboot, kernel_location);
   fb_set_color(15, 0);
   fb_clear();
   logo();
