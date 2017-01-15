@@ -73,10 +73,10 @@ int kmain(multiboot_info_t* multiboot, KernelLocation kernel_location) {
   fb_set_color(7, 0);
   fb_puts("\n\njosh@jos $ ");
 
-  LOG_HEX(INFO, "kernel_physical_start: ", kernel_location.kernel_physical_start);
-  LOG_HEX(INFO, "kernel_physical_end: ", kernel_location.kernel_physical_end);
-  LOG_HEX(INFO, "kernel_virtual_start: ", kernel_location.kernel_virtual_start);
-  LOG_HEX(INFO, "kernel_virtual_end: ", kernel_location.kernel_virtual_end);
+  LOG_HEX(INFO, "kernel.physical_start: ", kernel_location.physical_start);
+  LOG_HEX(INFO, "kernel.physical_end: ", kernel_location.physical_end);
+  LOG_HEX(INFO, "kernel.virtual_start: ", kernel_location.virtual_start);
+  LOG_HEX(INFO, "kernel.virtual_end: ", kernel_location.virtual_end);
 
   LOG(INFO, "help I'm trapped in a log factory.");
 
