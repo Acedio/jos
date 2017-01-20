@@ -18,7 +18,7 @@ typedef struct {
   FreePhysical* physical_page_stack_vaddr;
   FreePhysical* physical_page_stack_vtop;
 
-  unsigned int* buddy_tree_vaddr;
+  unsigned int  buddy_tree_vaddr;
   unsigned int  buddy_tree_depth;
 
   unsigned int  staging_vaddr;
@@ -186,11 +186,53 @@ void make_free_physical_stack(KernelLocation kernel_location,
             continue;
           }
         }
+        LOG_HEX(INFO, "Pushing block at ", free_physical[i].addr);
         *mem_cfg->physical_page_stack_vtop = free_physical[i];
         ++mem_cfg->physical_page_stack_vtop;
       }
     }
     i += mmap->size + 4;  // +4 because the size field does not include itself.
+  }
+}
+
+// Returns the address of a 4k page aligned chunk of memory.
+unsigned int pop_physical(MemCfg* mem_cfg) {
+  if (mem_cfg->physical_page_stack_vtop == mem_cfg->physical_page_stack_vaddr) {
+    LOG(ERROR, "No physical memory blocks left on the stack!");
+    return 0;
+  }
+  FreePhysical* free_physical = mem_cfg->physical_page_stack_vtop - 1;
+  if (free_physical->size < PAGE_SIZE) {
+    LOG(ERROR, "Looks like a physical block wasn't page sized?");
+    return 0;
+  }
+  unsigned int addr = free_physical->addr;
+  free_physical->size -= PAGE_SIZE;
+  free_physical->addr += PAGE_SIZE;
+  if (free_physical->size == 0) {
+    // Pop off empty blocks.
+    --mem_cfg->physical_page_stack_vtop;
+  }
+  return addr;
+}
+
+void make_virtual_buddy_tree(KernelLocation kernel_location, MemCfg* mem_cfg) {
+  // TODO: This is gonna assume our kernel is tiny (<4MB) and that the buddy
+  // tree will fit along side it in a 4MB page.
+  mem_cfg->buddy_tree_vaddr = kernel_location.virtual_end;
+  unsigned int buddy_tree_size_bytes = 0x40000;  // 256 kb
+  for (unsigned int vaddr = mem_cfg->buddy_tree_vaddr;
+       vaddr < mem_cfg->buddy_tree_vaddr + buddy_tree_size_bytes;
+       vaddr += PAGE_SIZE) {
+    unsigned int paddr = pop_physical(mem_cfg);
+    map_page(vaddr, paddr, mem_cfg->staging_vaddr, mem_cfg->staging_pte);
+
+    // Zero all the memory (zero means free)
+    unsigned int* zeroing_addr = (unsigned int*)vaddr;
+    for (unsigned int i = 0; i < PAGE_SIZE / sizeof(unsigned int); ++i) {
+      *zeroing_addr = 0;
+      ++zeroing_addr;
+    }
   }
 }
 
@@ -214,4 +256,5 @@ void init_paging(multiboot_info_t* multiboot_info,
 
   make_free_physical_stack(kernel_location, mmap_vaddr,
                            multiboot_info->mmap_length, &mem_cfg);
+  make_virtual_buddy_tree(kernel_location, &mem_cfg);
 }
