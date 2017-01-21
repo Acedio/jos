@@ -4,6 +4,8 @@
 #include "string.h"
 
 #define PAGE_SIZE 4096
+#define PAGE_MASK (PAGE_SIZE-1)
+#define PAGE_BITS 12
 
 // Defined in paging_asm.s to get 4096 byte alignment
 extern PageDirectoryEntry page_directory[1024];
@@ -128,11 +130,11 @@ void map_page(unsigned int vaddr, unsigned int paddr,
               unsigned int staging_vaddr, unsigned int staging_pte) {
   LOG_HEX(INFO, "Mapping virtual page: ", vaddr);
   LOG_HEX(INFO, "    to physical page: ", paddr);
-  if (vaddr & 0xFFF) {
+  if (vaddr & PAGE_MASK) {
     LOG(ERROR, "Tried to map non-page virtual address.");
     return;
   }
-  if (paddr & 0xFFF) {
+  if (paddr & PAGE_MASK) {
     LOG(ERROR, "Tried to map non-page physical address.");
     return;
   }
@@ -216,11 +218,58 @@ unsigned int pop_physical(MemCfg* mem_cfg) {
   return addr;
 }
 
+int get_buddy_bit(unsigned int buddy_tree_vaddr, unsigned int buddy_index) {
+  unsigned char buddy_byte =
+      ((unsigned char*)buddy_tree_vaddr)[buddy_index >> 3];
+  return (buddy_byte >> (buddy_index & 0x7)) & 0x1;
+}
+
+void set_buddy_bit(unsigned int buddy_tree_vaddr, unsigned int buddy_index,
+                   unsigned int bit_val) {
+  unsigned char buddy_bit_in_byte = 0x1 << (buddy_index & 0x7);
+  if (bit_val) {
+    ((unsigned char*)buddy_tree_vaddr)[buddy_index >> 3] |= buddy_bit_in_byte;
+  } else {
+    ((unsigned char*)buddy_tree_vaddr)[buddy_index >> 3] &=
+        (~buddy_bit_in_byte);
+  }
+}
+
+void claim_buddy_vaddr(unsigned int buddy_tree_vaddr,
+                       unsigned int claimed_vaddr) {
+  if (claimed_vaddr & PAGE_MASK) {
+    LOG_HEX(ERROR,
+            "Tried to claim non-page virtual address from the buddy tree: ",
+            claimed_vaddr);
+    return;
+  }
+  // Start the index at the lowest level. buddy_index at 0 is not a valid value,
+  // the root node is at index = 1.
+  unsigned int buddy_index =
+      (1 << (32 - PAGE_BITS)) + (claimed_vaddr >> PAGE_BITS);
+  if (get_buddy_bit(buddy_tree_vaddr, buddy_index)) {
+    LOG_HEX(ERROR, "claimed_vaddr was already claimed: ", claimed_vaddr);
+    return;
+  }
+  // Set the lowest layer bit.
+  set_buddy_bit(buddy_tree_vaddr, buddy_index, 1);
+  buddy_index >>= 1;
+  // Now set the parent bits that are not yet set. Reminder that buddy_index = 0
+  // is not valid, and that the root is at index = 1.
+  while (buddy_index && !get_buddy_bit(buddy_tree_vaddr, buddy_index)) {
+    set_buddy_bit(buddy_tree_vaddr, buddy_index, 1);
+    // Go up to the parent next.
+    buddy_index >>= 1;
+  }
+}
+
 void make_virtual_buddy_tree(KernelLocation kernel_location, MemCfg* mem_cfg) {
   // TODO: This is gonna assume our kernel is tiny (<4MB) and that the buddy
   // tree will fit along side it in a 4MB page.
   mem_cfg->buddy_tree_vaddr = kernel_location.virtual_end;
+  LOG_HEX(INFO, "buddy_tree_vaddr: ", mem_cfg->buddy_tree_vaddr);
   unsigned int buddy_tree_size_bytes = 0x40000;  // 256 kb
+  kernel_location.virtual_end += buddy_tree_size_bytes;
   for (unsigned int vaddr = mem_cfg->buddy_tree_vaddr;
        vaddr < mem_cfg->buddy_tree_vaddr + buddy_tree_size_bytes;
        vaddr += PAGE_SIZE) {
@@ -233,6 +282,11 @@ void make_virtual_buddy_tree(KernelLocation kernel_location, MemCfg* mem_cfg) {
       *zeroing_addr = 0;
       ++zeroing_addr;
     }
+  }
+  // Now claim the kernel space.
+  for (unsigned int vaddr = kernel_location.virtual_start;
+       vaddr < kernel_location.virtual_end; vaddr += PAGE_SIZE) {
+    claim_buddy_vaddr(mem_cfg->buddy_tree_vaddr, vaddr);
   }
 }
 
