@@ -82,5 +82,10 @@ int kmain(multiboot_info_t* multiboot, KernelLocation kernel_location) {
 
   print_stats(multiboot);
 
+  unsigned int* i = (unsigned int*)malloc(2 * sizeof(unsigned int));
+  LOG_HEX(INFO, "malloc'd vaddr = ", (unsigned int)i);
+  i = (unsigned int*)malloc(2 * sizeof(unsigned int));
+  LOG_HEX(INFO, "malloc'd vaddr = ", (unsigned int)i);
+
   return 0x42;
 }

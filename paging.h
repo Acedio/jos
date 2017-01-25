@@ -16,4 +16,6 @@ typedef unsigned int PageTableEntry;
 void init_paging(multiboot_info_t* multiboot_info,
                  KernelLocation kernel_location);
 
+void* malloc(unsigned int size);
+
 #endif  // PAGING_H

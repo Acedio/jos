@@ -22,3 +22,10 @@ global magic_bp
 magic_bp:
     xchg bx, bx                                          
     ret
+
+global invlpg
+
+invlpg:
+    mov eax, [esp + 4]
+    invlpg [eax]
+    ret

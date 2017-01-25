@@ -1,5 +1,6 @@
 #include "paging.h"
 
+#include "io.h"
 #include "log.h"
 #include "string.h"
 
@@ -23,6 +24,7 @@ typedef struct {
   unsigned int  buddy_tree_vaddr;
   unsigned int  buddy_tree_depth;
 
+  // REMEMBER TO INVALIDATE THE FRIGGIN' TLB WHEN CHANGING THE STAGING PAGE.
   unsigned int  staging_vaddr;
   // index of the staging page table entry in the os page table
   unsigned int  staging_pte;
@@ -30,6 +32,9 @@ typedef struct {
 
 MemCfg mem_cfg;
 
+typedef struct {
+  unsigned int log2_size;
+} MemBlockInfo;
 
 // # Physical memory allocation
 // Keep a stack of available memory pysical pages, along with their sizes in the
@@ -126,8 +131,7 @@ int find_free_in_mmap(const memory_map_t* mmap, KernelLocation kernel_location,
 // Maps the 4kb virtual page at vaddr to the physical page at paddr, using the
 // virtual page at staging_vaddr (index staging_pte in the OS's page table) as a
 // staging area for updating the affected PT.
-void map_page(unsigned int vaddr, unsigned int paddr,
-              unsigned int staging_vaddr, unsigned int staging_pte) {
+void map_page(unsigned int vaddr, unsigned int paddr, MemCfg* mem_cfg) {
   LOG_HEX(INFO, "Mapping virtual page: ", vaddr);
   LOG_HEX(INFO, "    to physical page: ", paddr);
   if (vaddr & PAGE_MASK) {
@@ -144,11 +148,12 @@ void map_page(unsigned int vaddr, unsigned int paddr,
   }
 
   // Get the physical address of the page table.
-  unsigned int pt_paddr = page_directory[pde] & 0xFFFFFC00;
-  // Map it into virtual memory in the OS's PT using the staging pde.
-  os_page_table[staging_pte] = pt_paddr | 0x3;
+  unsigned int pt_paddr = page_directory[pde] & 0xFFFFF000;
+  // Map it into virtual memory in the OS's PT using the staging pte.
+  os_page_table[mem_cfg->staging_pte] = pt_paddr | 0x3;
+  invlpg(mem_cfg->staging_vaddr);
 
-  PageTableEntry* pt = (PageTableEntry*)staging_vaddr;
+  PageTableEntry* pt = (PageTableEntry*)mem_cfg->staging_vaddr;
   unsigned int pte = (vaddr >> 12) & 0x3FF;
   pt[pte] = paddr | 0x3;  // 4kb page
 }
@@ -178,8 +183,7 @@ void make_free_physical_stack(KernelLocation kernel_location,
         if (!mem_cfg->physical_page_stack_vtop) {
           LOG_HEX(INFO, "Found free page at: ", free_physical[i].addr);
           map_page((unsigned int)mem_cfg->physical_page_stack_vaddr,
-                   free_physical[i].addr, mem_cfg->staging_vaddr,
-                   mem_cfg->staging_pte);
+                   free_physical[i].addr, mem_cfg);
           mem_cfg->physical_page_stack_vtop =
               mem_cfg->physical_page_stack_vaddr;
           free_physical[i].addr += PAGE_SIZE;
@@ -235,6 +239,17 @@ void set_buddy_bit(unsigned int buddy_tree_vaddr, unsigned int buddy_index,
   }
 }
 
+void claim_buddy_index(unsigned int buddy_tree_vaddr,
+                       unsigned int buddy_index) {
+  // Reminder that buddy_index = 0 is not valid, and that the root is at index =
+  // 1.
+  while (buddy_index && !get_buddy_bit(buddy_tree_vaddr, buddy_index)) {
+    set_buddy_bit(buddy_tree_vaddr, buddy_index, 1);
+    // Go up to the parent next.
+    buddy_index >>= 1;
+  }
+}
+
 void claim_buddy_vaddr(unsigned int buddy_tree_vaddr,
                        unsigned int claimed_vaddr) {
   if (claimed_vaddr & PAGE_MASK) {
@@ -251,15 +266,15 @@ void claim_buddy_vaddr(unsigned int buddy_tree_vaddr,
     LOG_HEX(ERROR, "claimed_vaddr was already claimed: ", claimed_vaddr);
     return;
   }
-  // Set the lowest layer bit.
-  set_buddy_bit(buddy_tree_vaddr, buddy_index, 1);
-  buddy_index >>= 1;
-  // Now set the parent bits that are not yet set. Reminder that buddy_index = 0
-  // is not valid, and that the root is at index = 1.
-  while (buddy_index && !get_buddy_bit(buddy_tree_vaddr, buddy_index)) {
-    set_buddy_bit(buddy_tree_vaddr, buddy_index, 1);
-    // Go up to the parent next.
-    buddy_index >>= 1;
+  claim_buddy_index(buddy_tree_vaddr, buddy_index);
+}
+
+void zero_page(unsigned int vaddr) {
+  LOG_HEX(INFO, "Zeroing: ", vaddr);
+  unsigned int* zeroing_addr = (unsigned int*)vaddr;
+  for (unsigned int i = 0; i < PAGE_SIZE / sizeof(unsigned int); ++i) {
+    *zeroing_addr = 0;
+    ++zeroing_addr;
   }
 }
 
@@ -274,20 +289,99 @@ void make_virtual_buddy_tree(KernelLocation kernel_location, MemCfg* mem_cfg) {
        vaddr < mem_cfg->buddy_tree_vaddr + buddy_tree_size_bytes;
        vaddr += PAGE_SIZE) {
     unsigned int paddr = pop_physical(mem_cfg);
-    map_page(vaddr, paddr, mem_cfg->staging_vaddr, mem_cfg->staging_pte);
-
+    map_page(vaddr, paddr, mem_cfg);
     // Zero all the memory (zero means free)
-    unsigned int* zeroing_addr = (unsigned int*)vaddr;
-    for (unsigned int i = 0; i < PAGE_SIZE / sizeof(unsigned int); ++i) {
-      *zeroing_addr = 0;
-      ++zeroing_addr;
-    }
+    zero_page(vaddr);
   }
   // Now claim the kernel space.
   for (unsigned int vaddr = kernel_location.virtual_start;
        vaddr < kernel_location.virtual_end; vaddr += PAGE_SIZE) {
     claim_buddy_vaddr(mem_cfg->buddy_tree_vaddr, vaddr);
   }
+}
+
+// FWIW, I thought of this independently (:P), but formatting taken from
+// http://graphics.stanford.edu/~seander/bithacks.html
+int log2(unsigned int v) {
+  if (v == 0) {
+    return -1;
+  }
+  int r = 0;
+  int a;
+  r = (v > 0xFFFF) << 4; v >>= r;
+  a = (v > 0xFF)   << 3; v >>= a; r |= a;
+  a = (v > 0xF)    << 2; v >>= a; r |= a;
+  a = (v > 0x3)    << 1; v >>= a; r |= a;
+                                  r |= (v >> 1);
+  return r;
+}
+
+unsigned int alloc_vblock_of_size(unsigned int buddy_tree_vaddr,
+                                  unsigned int power_2) {
+  if (power_2 < PAGE_BITS) {
+    return 0;
+  }
+  // Find the row of the tree we're searching. Max log2 will be rounded up to 32
+  // (meaning we need 4 gigs of memory, ha), resulting in row 1, the first row
+  // of the tree.  Row 0 (buddy_index 0) is an invalid entry.
+  int row = 33 - power_2;
+  int row_root = 1 << (row - 1);
+  for (int index = row_root; index < (row_root << 2); ++index) {
+    if (!get_buddy_bit(buddy_tree_vaddr, index)) {
+      claim_buddy_index(buddy_tree_vaddr, index);
+      return (index - row_root) << power_2;
+    }
+  }
+  return 0;  // Not available.
+}
+
+// Add a page table to the pd for the vaddr if it needs it.
+void add_page_table(unsigned int vaddr, MemCfg* mem_cfg) {
+  unsigned int pde = (vaddr >> 22) & 0x3FF;
+  if (!(page_directory[pde] & 1)) {
+    LOG(INFO,
+        "Tried to map virtual address that had no page table. Mapping a new "
+        "page table.");
+    LOG_HEX(INFO, "Adding a page table for vaddr: ", vaddr);
+    LOG_HEX(INFO, "  which is pde: : ", pde);
+    // Find an unused physical chunk
+    unsigned int paddr = pop_physical(mem_cfg);
+    LOG_HEX(INFO, "Found paddr for new page table: ", paddr);
+    LOG_HEX(INFO, " staging_pte: ", mem_cfg->staging_pte);
+    LOG_HEX(INFO, " staging_vaddr: ", mem_cfg->staging_vaddr);
+    // Map it into the staging area so we can...
+    os_page_table[mem_cfg->staging_pte] = paddr | 0x3;
+    invlpg(mem_cfg->staging_vaddr);
+    // ... zero it.
+    zero_page(mem_cfg->staging_vaddr);
+    // Map it into the page directory.
+    page_directory[pde] = paddr | 0x3;
+  }
+}
+
+void *malloc(unsigned int size) {
+  unsigned int size_with_meminfo = size + sizeof(MemBlockInfo);
+  // Check for overflow.
+  if (size_with_meminfo < size) {
+    return (void*)0;
+  }
+  if (size_with_meminfo < PAGE_SIZE) {
+    size_with_meminfo = PAGE_SIZE;
+  }
+  // Round up to the next log2 e.g. 5 bytes -> 3
+  int log2_roundup = log2(size_with_meminfo - 1) + 1;
+  unsigned int mem =
+      alloc_vblock_of_size(mem_cfg.buddy_tree_vaddr, log2_roundup);
+  // TODO: Handle cases of >=4MB blocks
+  add_page_table(mem, &mem_cfg);
+  for (unsigned int vaddr = mem; vaddr < mem + (1 << log2_roundup); vaddr +=
+       PAGE_SIZE) {
+    unsigned int paddr = pop_physical(&mem_cfg);
+    map_page(vaddr, paddr, &mem_cfg);
+  }
+  MemBlockInfo* info = (MemBlockInfo*)mem;
+  info->log2_size = log2_roundup;
+  return (void*)(info + 1);
 }
 
 void init_paging(multiboot_info_t* multiboot_info,

@@ -12,4 +12,6 @@ unsigned char inb(unsigned short port);
 
 void magic_bp();
 
+void invlpg(unsigned int vaddr);
+
 #endif  // IO_H
