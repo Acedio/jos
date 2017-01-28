@@ -30,7 +30,7 @@ typedef struct {
   unsigned int  staging_pte;
 } MemCfg;
 
-MemCfg mem_cfg;
+MemCfg mem_cfg_;
 
 typedef struct {
   unsigned int log2_size;
@@ -158,6 +158,33 @@ void map_page(unsigned int vaddr, unsigned int paddr, MemCfg* mem_cfg) {
   pt[pte] = paddr | 0x3;  // 4kb page
 }
 
+// Grabs the 4kb physical page currently associated with the given vaddr.
+// Returns 0xFFFFFFFF on error.
+unsigned int translate_vaddr(unsigned int vaddr, MemCfg* mem_cfg) {
+  if (vaddr & PAGE_MASK) {
+    LOG(ERROR, "Tried to map non-page virtual address.");
+    return 0xFFFFFFFF;
+  }
+  unsigned int pde = (vaddr >> 22) & 0x3FF;
+  if (!(page_directory[pde] & 1)) {
+    LOG(ERROR, "Tried to translate virtual address that had no page table.");
+    return 0xFFFFFFFF;
+  }
+
+  // Get the physical address of the page table.
+  unsigned int pt_paddr = page_directory[pde] & 0xFFFFF000;
+  // Map it into virtual memory in the OS's PT using the staging pte.
+  os_page_table[mem_cfg->staging_pte] = pt_paddr | 0x3;
+  invlpg(mem_cfg->staging_vaddr);
+
+  PageTableEntry* pt = (PageTableEntry*)mem_cfg->staging_vaddr;
+  unsigned int pte = (vaddr >> 12) & 0x3FF;
+  if (!(pt[pte] & 1)) {
+    // No page was mapped, return error.
+    return 0xFFFFFFFF;
+  }
+  return pt[pte] & 0xFFFFF000;
+}
 // Creates a stack of FreePhysical structs that map out the available physical
 // memory of the system (which are determined using the passed mmap and
 // kernel_location). mem_cfg->physical_page_stack_vaddr should be set to a free
@@ -220,6 +247,26 @@ unsigned int pop_physical(MemCfg* mem_cfg) {
     --mem_cfg->physical_page_stack_vtop;
   }
   return addr;
+}
+
+void push_physical(unsigned int mem, MemCfg* mem_cfg) {
+  // TODO: Check for stack overflow.
+  FreePhysical* free_physical = mem_cfg->physical_page_stack_vtop - 1;
+  if (mem + PAGE_SIZE == free_physical->addr) {
+    // mem is at the beginning of the top chunk (somewhat likely).
+    free_physical->addr -= PAGE_SIZE;
+    free_physical->size += PAGE_SIZE;
+  } else if (mem == free_physical->addr + free_physical->size) {
+    // mem is at the end of the top chunk (pretty unlikely).
+    free_physical->size += PAGE_SIZE;
+  } else {
+    // mem is not touching the top chunk (pretty likely).
+    // So add a new free chunk.
+    ++mem_cfg->physical_page_stack_vtop;
+    free_physical = mem_cfg->physical_page_stack_vtop - 1;
+    free_physical->addr = mem;
+    free_physical->size = PAGE_SIZE;
+  }
 }
 
 int get_buddy_bit(unsigned int buddy_tree_vaddr, unsigned int buddy_index) {
@@ -403,13 +450,13 @@ void *malloc(unsigned int size) {
   // Round up to the next log2 e.g. 5 bytes -> 3
   int log2_roundup = log2(size_with_meminfo - 1) + 1;
   unsigned int mem =
-      alloc_vblock_of_size(mem_cfg.buddy_tree_vaddr, log2_roundup);
+      alloc_vblock_of_size(mem_cfg_.buddy_tree_vaddr, log2_roundup);
   // TODO: Handle cases of >=4MB blocks
-  add_page_table(mem, &mem_cfg);
+  add_page_table(mem, &mem_cfg_);
   for (unsigned int vaddr = mem; vaddr < mem + (1 << log2_roundup); vaddr +=
        PAGE_SIZE) {
-    unsigned int paddr = pop_physical(&mem_cfg);
-    map_page(vaddr, paddr, &mem_cfg);
+    unsigned int paddr = pop_physical(&mem_cfg_);
+    map_page(vaddr, paddr, &mem_cfg_);
   }
   MemBlockInfo* info = (MemBlockInfo*)mem;
   info->log2_size = log2_roundup;
@@ -426,8 +473,12 @@ void free(void* mem) {
   for (unsigned int vaddr = (unsigned int)info;
        vaddr < (unsigned int)info + (1 << info->log2_size);
        vaddr += PAGE_SIZE) {
-    free_buddy_vaddr(mem_cfg.buddy_tree_vaddr, vaddr);
-    // TODO: Return the physical page to the stack.
+    free_buddy_vaddr(mem_cfg_.buddy_tree_vaddr, vaddr);
+    unsigned int paddr = translate_vaddr(vaddr, &mem_cfg_);
+    // translate_vaddr returns 0xFFFFFFFF on error.
+    if (paddr != 0xFFFFFFFF) {
+      push_physical(paddr, &mem_cfg_);
+    }
   }
 }
 
@@ -439,17 +490,17 @@ void init_paging(multiboot_info_t* multiboot_info,
 
   // First grab the staging page, which is used to populate page tables and
   // other things that we don't need to keep in the vaddr space.
-  mem_cfg.staging_vaddr = kernel_location.virtual_end;
-  mem_cfg.staging_pte   = (kernel_location.virtual_end >> 12) & 0x3FF;
+  mem_cfg_.staging_vaddr = kernel_location.virtual_end;
+  mem_cfg_.staging_pte   = (kernel_location.virtual_end >> 12) & 0x3FF;
   kernel_location.virtual_end += PAGE_SIZE;
 
   // Map the physical page stack to the virtual space after the end of the
   // kernel. It should be able to grow this way.
-  mem_cfg.physical_page_stack_vaddr =
+  mem_cfg_.physical_page_stack_vaddr =
       (FreePhysical*)kernel_location.virtual_end;
   kernel_location.virtual_end += PAGE_SIZE;
 
   make_free_physical_stack(kernel_location, mmap_vaddr,
-                           multiboot_info->mmap_length, &mem_cfg);
-  make_virtual_buddy_tree(kernel_location, &mem_cfg);
+                           multiboot_info->mmap_length, &mem_cfg_);
+  make_virtual_buddy_tree(kernel_location, &mem_cfg_);
 }
