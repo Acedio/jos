@@ -17,5 +17,6 @@ void init_paging(multiboot_info_t* multiboot_info,
                  KernelLocation kernel_location);
 
 void* malloc(unsigned int size);
+void free(void* mem);
 
 #endif  // PAGING_H

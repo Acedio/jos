@@ -269,6 +269,38 @@ void claim_buddy_vaddr(unsigned int buddy_tree_vaddr,
   claim_buddy_index(buddy_tree_vaddr, buddy_index);
 }
 
+void free_buddy_index(unsigned int buddy_tree_vaddr, unsigned int buddy_index) {
+  while (buddy_index && get_buddy_bit(buddy_tree_vaddr, buddy_index)) {
+    // Mark the memory as free.
+    set_buddy_bit(buddy_tree_vaddr, buddy_index, 0);
+    // Check to see if the buddy is taken.
+    if (get_buddy_bit(buddy_tree_vaddr, buddy_index ^ 1)) {
+      // If it's taken, no further action is needed.
+      return;
+    }
+    // If the buddy is also free, free the parent chunk.
+    buddy_index >>= 1;
+  }
+}
+
+void free_buddy_vaddr(unsigned int buddy_tree_vaddr, unsigned int freed_vaddr) {
+  if (freed_vaddr & PAGE_MASK) {
+    LOG_HEX(ERROR,
+            "Tried to free non-page virtual address from the buddy tree: ",
+            freed_vaddr);
+    return;
+  }
+  // Start the index at the lowest level. buddy_index at 0 is not a valid value,
+  // the root node is at index = 1.
+  unsigned int buddy_index =
+      (1 << (32 - PAGE_BITS)) + (freed_vaddr >> PAGE_BITS);
+  if (!get_buddy_bit(buddy_tree_vaddr, buddy_index)) {
+    LOG_HEX(ERROR, "freed_vaddr was already freed: ", freed_vaddr);
+    return;
+  }
+  free_buddy_index(buddy_tree_vaddr, buddy_index);
+}
+
 void zero_page(unsigned int vaddr) {
   LOG_HEX(INFO, "Zeroing: ", vaddr);
   unsigned int* zeroing_addr = (unsigned int*)vaddr;
@@ -382,6 +414,21 @@ void *malloc(unsigned int size) {
   MemBlockInfo* info = (MemBlockInfo*)mem;
   info->log2_size = log2_roundup;
   return (void*)(info + 1);
+}
+
+void free(void* mem) {
+  MemBlockInfo* info = (MemBlockInfo*)mem - 1;
+  if ((unsigned int)info & 0xFFF) {
+    LOG_HEX(ERROR, "Tried to free() a non-page aligned chunk: ",
+            (unsigned int)info);
+    return;
+  }
+  for (unsigned int vaddr = (unsigned int)info;
+       vaddr < (unsigned int)info + (1 << info->log2_size);
+       vaddr += PAGE_SIZE) {
+    free_buddy_vaddr(mem_cfg.buddy_tree_vaddr, vaddr);
+    // TODO: Return the physical page to the stack.
+  }
 }
 
 void init_paging(multiboot_info_t* multiboot_info,
