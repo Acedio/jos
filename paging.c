@@ -235,7 +235,8 @@ void push_free_physical_with_reserved(unsigned int free_start,
 // the stack.
 // TODO: This assumes that all inspected addresses fall on page boundaries,
 // which is maybe not true?
-void make_free_physical_stack(MemorySpan kernel_location,
+void make_free_physical_stack(MemorySpan* reserved_spans,
+                              int num_reserved,
                               unsigned long mmap_vaddr,
                               unsigned long mmap_length, MemCfg* mem_cfg) {
   // Set to null initially to specify that the stack needs to be allocated
@@ -250,7 +251,7 @@ void make_free_physical_stack(MemorySpan kernel_location,
     if (mmap->type == 1) {
       unsigned int start = mmap->base_addr_low;
       unsigned int end = mmap->base_addr_low + mmap->length_low;
-      push_free_physical_with_reserved(start, end, &kernel_location, 1,
+      push_free_physical_with_reserved(start, end, reserved_spans, num_reserved,
                                        mem_cfg);
     }
     i += mmap->size + 4;  // +4 because the size field does not include itself.
@@ -528,12 +529,27 @@ void init_paging(multiboot_info_t* multiboot_info,
   mem_cfg_.physical_page_stack_vaddr = (MemorySpan*)kernel_location.virtual_end;
   kernel_location.virtual_end += PAGE_SIZE;
 
-  // TODO: Currently only the kernel is reserved, but modules should be added
-  // here as well.
-  MemorySpan reserved_blocks[1];
+  // Space for the kernal and the modules.
+  MemorySpan reserved_blocks[1 + NUM_MODULES];
+
+  // First the kernel.
   reserved_blocks[0].start = kernel_location.physical_start;
   reserved_blocks[0].end = kernel_location.physical_end;
-  make_free_physical_stack(reserved_blocks[0], mmap_vaddr,
+  
+  // Then the modules.
+  if (multiboot_info->mods_count != NUM_MODULES) {
+    LOG_HEX(ERROR, "Unexpected number of modules: ",
+            multiboot_info->mods_count);
+    return;
+  }
+  for (unsigned int i = 0; i < multiboot_info->mods_count; ++i) {
+    module_t* module = (module_t*)(multiboot_info->mods_addr + 0xC0000000) + i;
+    reserved_blocks[i + 1].start = module->mod_start;
+    // mod_start is page aligned, but mod_end isn't so we have to round up. 
+    reserved_blocks[i + 1].end = (module->mod_end + PAGE_SIZE - 1) & ~PAGE_MASK;
+  }
+  make_free_physical_stack(reserved_blocks,
+                           NUM_MODULES + 1, mmap_vaddr,
                            multiboot_info->mmap_length, &mem_cfg_);
   make_virtual_buddy_tree(kernel_location, &mem_cfg_);
 }

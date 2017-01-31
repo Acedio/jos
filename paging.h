@@ -3,6 +3,8 @@
 
 #include "multiboot.h"
 
+#define NUM_MODULES 1
+
 typedef struct __attribute__((packed)) {
   unsigned int physical_start;
   unsigned int physical_end;

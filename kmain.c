@@ -96,7 +96,7 @@ int kmain(multiboot_info_t* multiboot, KernelLocation kernel_location) {
   LOG(INFO, "free'd b");
 
   if (multiboot->mods_count != 1) {
-    LOG_HEX(INFO, "Unexpected number of modules: ", multiboot->mods_count);
+    LOG_HEX(ERROR, "Unexpected number of modules: ", multiboot->mods_count);
     return -1;
   }
 
