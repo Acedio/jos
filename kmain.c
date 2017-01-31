@@ -95,5 +95,20 @@ int kmain(multiboot_info_t* multiboot, KernelLocation kernel_location) {
   free(b);
   LOG(INFO, "free'd b");
 
-  return 0x42;
+  if (multiboot->mods_count != 1) {
+    LOG_HEX(INFO, "Unexpected number of modules: ", multiboot->mods_count);
+    return -1;
+  }
+
+  module_t* module = (module_t*)(multiboot->mods_addr + 0xC0000000);
+
+  void (*program)(void) = (void (*)(void))(module->mod_start + 0xC0000000);
+  LOG_HEX(INFO, "HERE WE GO, INTO YONDER USER PROGRAM! ",
+          (unsigned int)program);
+  if (module->string) {
+    LOG(INFO, (char*)(module->string + 0xC0000000));
+  }
+  program();
+
+  return 0;
 }

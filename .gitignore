@@ -1,5 +1,6 @@
-*.o
 *.elf
+*.flat
+*.o
 *.out
 stage2_eltorito
 jos.iso

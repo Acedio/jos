@@ -10,8 +10,9 @@ all: kernel.elf
 kernel.elf: $(OBJECTS) link.ld
 		ld -T link.ld $(LDFLAGS) $(OBJECTS) -o kernel.elf
 
-jos.iso: kernel.elf
+jos.iso: kernel.elf program.flat
 		cp kernel.elf iso/boot/kernel.elf
+		cp program.flat iso/modules/program.flat
 		genisoimage -R                              \
 								-b boot/grub/stage2_eltorito    \
 								-no-emul-boot                   \
@@ -26,8 +27,11 @@ jos.iso: kernel.elf
 run: jos.iso
 		bochs -f bochsrc.txt -q
 
+%.flat: %.s
+	  $(AS) -f bin $< -o $@
+
 %.o: %.c
-		$(CC) $(CFLAGS)  $< -o $@
+		$(CC) $(CFLAGS) $< -o $@
 
 %.o: %.s
 		$(AS) $(ASFLAGS) $< -o $@
