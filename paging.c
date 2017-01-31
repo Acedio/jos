@@ -13,13 +13,13 @@ extern PageDirectoryEntry page_directory[1024];
 extern PageTableEntry os_page_table[1024];
 
 typedef struct __attribute__((packed)) {
-  unsigned int addr;
-  unsigned int size;
-} FreePhysical;
+  unsigned int start;
+  unsigned int end;
+} MemorySpan;
 
 typedef struct {
-  FreePhysical* physical_page_stack_vaddr;
-  FreePhysical* physical_page_stack_vtop;
+  MemorySpan* physical_page_stack_vaddr;
+  MemorySpan* physical_page_stack_vtop;
 
   unsigned int  buddy_tree_vaddr;
   unsigned int  buddy_tree_depth;
@@ -72,60 +72,47 @@ typedef struct {
 // is using the virtual space, so we should be fine to just use the last 256kb
 // of space (0xFFFC0000).
 
-
-void populate_free_physical(unsigned int start, unsigned int end,
-                            FreePhysical* free_physical) {
-  LOG(INFO, "Looks free!");
-  LOG_HEX(INFO, " start: ", start);
-  LOG_HEX(INFO, " end: ", end);
-  free_physical->addr = start;
-  free_physical->size = end - start;
+void make_span(unsigned int start, unsigned int end,
+               MemorySpan* free_physical) {
+  free_physical->start = start;
+  free_physical->end = end;
 }
 
-// Finds a number (0<=n<=2) of free physical memory locations in mmap, while
-// taking the kernel_location into account. Returns number of elements in
-// free_physical that were populated.
-int find_free_in_mmap(const memory_map_t* mmap, KernelLocation kernel_location,
-                      FreePhysical free_physical[2]) {
-  // 1 means available
-  if (mmap->type == 1) {
-    unsigned int start = mmap->base_addr_low;
-    unsigned int end = mmap->base_addr_low + mmap->length_low;
-    if (start <= kernel_location.physical_start) {
-      if (end <= kernel_location.physical_start) {
-        // Free range is completely before kernel.
-        populate_free_physical(start, end, &free_physical[0]);
-        return 1;
-      } else if (end <= kernel_location.physical_end) {
-        // Partial kernel collision (unless equal, then total collision).
-        populate_free_physical(start, kernel_location.physical_end,
-                               &free_physical[0]);
-        return 1;
-      } else {
-        // Kernel is totally contained within this block.
-        populate_free_physical(start, kernel_location.physical_start,
-                               &free_physical[0]);
-        populate_free_physical(kernel_location.physical_end, end,
-                               &free_physical[1]);
-        return 2;
-      }
-    } else if (start < kernel_location.physical_end) {
-      if (end <= kernel_location.physical_end) {
-        // Weird, the kernel covers this entire block?
-        return 0;
-      } else {
-        // Partial kernel collision.
-        populate_free_physical(kernel_location.physical_end, end,
-                               &free_physical[0]);
-        return 1;
-      }
+// Finds a number (0<=n<=2) of free memory locations in the span from start to
+// end, while taking the reserved_span into account. Returns number of elements
+// in free_spans that were populated.
+int find_free_with_reserved(unsigned int start, unsigned int end,
+                            MemorySpan reserved_span,
+                            MemorySpan free_spans[2]) {
+  if (start <= reserved_span.start) {
+    if (end <= reserved_span.start) {
+      // Free range is completely before the reserved_span.
+      make_span(start, end, &free_spans[0]);
+      return 1;
+    } else if (end <= reserved_span.end) {
+      // Partial reserved_span collision (unless equal, then total collision).
+      make_span(start, reserved_span.end, &free_spans[0]);
+      return 1;
     } else {
-      // Free range is completely after kernel.
-      populate_free_physical(start, end, &free_physical[0]);
+      // reserved_span is totally contained within this block.
+      make_span(start, reserved_span.start, &free_spans[0]);
+      make_span(reserved_span.end, end, &free_spans[1]);
+      return 2;
+    }
+  } else if (start < reserved_span.end) {
+    if (end <= reserved_span.end) {
+      // The reserved_span covers this entire block.
+      return 0;
+    } else {
+      // Partial reserved_span collision.
+      make_span(reserved_span.end, end, &free_spans[0]);
       return 1;
     }
+  } else {
+    // Free range is completely after reserved_span.
+    make_span(start, end, &free_spans[0]);
+    return 1;
   }
-  return 0;
 }
 
 // Maps the 4kb virtual page at vaddr to the physical page at paddr, using the
@@ -185,7 +172,62 @@ unsigned int translate_vaddr(unsigned int vaddr, MemCfg* mem_cfg) {
   }
   return pt[pte] & 0xFFFFF000;
 }
-// Creates a stack of FreePhysical structs that map out the available physical
+
+// Pushes a span of memory defined by start and end onto the free physical
+// memory stack. Reserves space for the stack if it doesn't yet exist.
+void push_free_physical(unsigned int start, unsigned int end, MemCfg* mem_cfg) {
+  if (!mem_cfg->physical_page_stack_vtop) {
+    LOG_HEX(INFO, "First free physical page pushed. Found free page at: ",
+            start);
+    LOG_HEX(INFO, "                                       that ends at: ", end);
+    map_page((unsigned int)mem_cfg->physical_page_stack_vaddr, start, mem_cfg);
+    mem_cfg->physical_page_stack_vtop = mem_cfg->physical_page_stack_vaddr;
+    start += PAGE_SIZE;
+    if (start >= end) {
+      return;
+    }
+  }
+  LOG_HEX(INFO, "Pushing block starting at ", start);
+  LOG_HEX(INFO, "                ending at ", end);
+  make_span(start, end, mem_cfg->physical_page_stack_vtop);
+  ++mem_cfg->physical_page_stack_vtop;
+}
+
+// Pushes spans of memory onto the stack of free physical memory, respecting the
+// given reserved_spans by removing contained areas them from the span defined
+// by [free_start, free_end) before pushing.
+void push_free_physical_with_reserved(unsigned int free_start,
+                                      unsigned int free_end,
+                                      MemorySpan* reserved_spans,
+                                      int num_reserved, MemCfg* mem_cfg) {
+  LOG_HEX(INFO, "populate_physical_stack: free_start: ", free_start);
+  LOG_HEX(INFO, "                           free_end: ", free_end);
+  LOG_HEX(INFO, "                       num_reserved: ", num_reserved);
+  if (free_start >= free_end) {
+    return;
+  }
+  if (num_reserved <= 0) {
+    // Base case: There are no reserved spans left, so we just push the whole
+    // free span.
+    push_free_physical(free_start, free_end, mem_cfg);
+    return;
+  }
+
+  MemorySpan free_physical[2];
+  // Find the physical blocks with respect to the first reserved span in the
+  // list.
+  int num_free = find_free_with_reserved(free_start, free_end, *reserved_spans,
+                                         free_physical);
+  for (int i = 0; i < num_free; ++i) {
+    // Recurse to check the other reserved spans (there eventually will be no
+    // more).
+    push_free_physical_with_reserved(free_physical[i].start,
+                                     free_physical[i].end, reserved_spans + 1,
+                                     num_reserved - 1, mem_cfg);
+  }
+}
+
+// Creates a stack of MemorySpan structs that map out the available physical
 // memory of the system (which are determined using the passed mmap and
 // kernel_location). mem_cfg->physical_page_stack_vaddr should be set to a free
 // virtual page, and the OS's staging page should be set up as well before
@@ -193,36 +235,23 @@ unsigned int translate_vaddr(unsigned int vaddr, MemCfg* mem_cfg) {
 // the stack.
 // TODO: This assumes that all inspected addresses fall on page boundaries,
 // which is maybe not true?
-void make_free_physical_stack(KernelLocation kernel_location,
+void make_free_physical_stack(MemorySpan kernel_location,
                               unsigned long mmap_vaddr,
                               unsigned long mmap_length, MemCfg* mem_cfg) {
-  mem_cfg->physical_page_stack_vtop = (FreePhysical*)0;
+  // Set to null initially to specify that the stack needs to be allocated
+  // physical space.
+  mem_cfg->physical_page_stack_vtop = (MemorySpan*)0;
 
   LOG(INFO, "Populating free physical memory stack.");
   unsigned int i = 0;
   while (i < mmap_length) {
     memory_map_t* mmap = (memory_map_t*)(mmap_vaddr + i);
-    FreePhysical free_physical[2];
-    int num_free = find_free_in_mmap(mmap, kernel_location, free_physical);
-    for (int i = 0; i < num_free; ++i ) {
-      if (free_physical[i].size > 0) {
-        // If we haven't yet allocated a page.
-        if (!mem_cfg->physical_page_stack_vtop) {
-          LOG_HEX(INFO, "Found free page at: ", free_physical[i].addr);
-          map_page((unsigned int)mem_cfg->physical_page_stack_vaddr,
-                   free_physical[i].addr, mem_cfg);
-          mem_cfg->physical_page_stack_vtop =
-              mem_cfg->physical_page_stack_vaddr;
-          free_physical[i].addr += PAGE_SIZE;
-          free_physical[i].size -= PAGE_SIZE;
-          if (free_physical[i].size <= 0) {
-            continue;
-          }
-        }
-        LOG_HEX(INFO, "Pushing block at ", free_physical[i].addr);
-        *mem_cfg->physical_page_stack_vtop = free_physical[i];
-        ++mem_cfg->physical_page_stack_vtop;
-      }
+    // 1 means available
+    if (mmap->type == 1) {
+      unsigned int start = mmap->base_addr_low;
+      unsigned int end = mmap->base_addr_low + mmap->length_low;
+      push_free_physical_with_reserved(start, end, &kernel_location, 1,
+                                       mem_cfg);
     }
     i += mmap->size + 4;  // +4 because the size field does not include itself.
   }
@@ -234,15 +263,14 @@ unsigned int pop_physical(MemCfg* mem_cfg) {
     LOG(ERROR, "No physical memory blocks left on the stack!");
     return 0;
   }
-  FreePhysical* free_physical = mem_cfg->physical_page_stack_vtop - 1;
-  if (free_physical->size < PAGE_SIZE) {
+  MemorySpan* free_physical = mem_cfg->physical_page_stack_vtop - 1;
+  if (free_physical->end - free_physical->start < PAGE_SIZE) {
     LOG(ERROR, "Looks like a physical block wasn't page sized?");
     return 0;
   }
-  unsigned int addr = free_physical->addr;
-  free_physical->size -= PAGE_SIZE;
-  free_physical->addr += PAGE_SIZE;
-  if (free_physical->size == 0) {
+  unsigned int addr = free_physical->start;
+  free_physical->start += PAGE_SIZE;
+  if (free_physical->start >= free_physical->end) {
     // Pop off empty blocks.
     --mem_cfg->physical_page_stack_vtop;
   }
@@ -251,21 +279,20 @@ unsigned int pop_physical(MemCfg* mem_cfg) {
 
 void push_physical(unsigned int mem, MemCfg* mem_cfg) {
   // TODO: Check for stack overflow.
-  FreePhysical* free_physical = mem_cfg->physical_page_stack_vtop - 1;
-  if (mem + PAGE_SIZE == free_physical->addr) {
+  MemorySpan* free_physical = mem_cfg->physical_page_stack_vtop - 1;
+  if (mem + PAGE_SIZE == free_physical->start) {
     // mem is at the beginning of the top chunk (somewhat likely).
-    free_physical->addr -= PAGE_SIZE;
-    free_physical->size += PAGE_SIZE;
-  } else if (mem == free_physical->addr + free_physical->size) {
+    free_physical->start -= PAGE_SIZE;
+  } else if (mem == free_physical->end) {
     // mem is at the end of the top chunk (pretty unlikely).
-    free_physical->size += PAGE_SIZE;
+    free_physical->end += PAGE_SIZE;
   } else {
     // mem is not touching the top chunk (pretty likely).
     // So add a new free chunk.
     ++mem_cfg->physical_page_stack_vtop;
     free_physical = mem_cfg->physical_page_stack_vtop - 1;
-    free_physical->addr = mem;
-    free_physical->size = PAGE_SIZE;
+    free_physical->start = mem;
+    free_physical->end = mem + PAGE_SIZE;
   }
 }
 
@@ -496,11 +523,17 @@ void init_paging(multiboot_info_t* multiboot_info,
 
   // Map the physical page stack to the virtual space after the end of the
   // kernel. It should be able to grow this way.
-  mem_cfg_.physical_page_stack_vaddr =
-      (FreePhysical*)kernel_location.virtual_end;
+  // TODO: Seems like a good idea to just store this stack as a linked list in
+  // the unused RAM itself.
+  mem_cfg_.physical_page_stack_vaddr = (MemorySpan*)kernel_location.virtual_end;
   kernel_location.virtual_end += PAGE_SIZE;
 
-  make_free_physical_stack(kernel_location, mmap_vaddr,
+  // TODO: Currently only the kernel is reserved, but modules should be added
+  // here as well.
+  MemorySpan reserved_blocks[1];
+  reserved_blocks[0].start = kernel_location.physical_start;
+  reserved_blocks[0].end = kernel_location.physical_end;
+  make_free_physical_stack(reserved_blocks[0], mmap_vaddr,
                            multiboot_info->mmap_length, &mem_cfg_);
   make_virtual_buddy_tree(kernel_location, &mem_cfg_);
 }
