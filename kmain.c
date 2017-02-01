@@ -102,13 +102,15 @@ int kmain(multiboot_info_t* multiboot, KernelLocation kernel_location) {
 
   module_t* module = (module_t*)(multiboot->mods_addr + 0xC0000000);
 
-  void (*program)(void) = (void (*)(void))(module->mod_start + 0xC0000000);
+  unsigned int (*program)(void) = (unsigned int (*)(void))map_module(module);
   LOG_HEX(INFO, "HERE WE GO, INTO YONDER USER PROGRAM! ",
           (unsigned int)program);
   if (module->string) {
     LOG(INFO, (char*)(module->string + 0xC0000000));
   }
-  program();
+  magic_bp();
+  unsigned int result = program();
+  LOG_HEX(INFO, "program result = ", result);
 
   return 0;
 }

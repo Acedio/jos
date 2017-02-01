@@ -8,6 +8,9 @@
 #define PAGE_MASK (PAGE_SIZE-1)
 #define PAGE_BITS 12
 
+typedef unsigned int PageDirectoryEntry;
+typedef unsigned int PageTableEntry;
+
 // Defined in paging_asm.s to get 4096 byte alignment
 extern PageDirectoryEntry page_directory[1024];
 extern PageTableEntry os_page_table[1024];
@@ -33,7 +36,7 @@ typedef struct {
 MemCfg mem_cfg_;
 
 typedef struct {
-  unsigned int log2_size;
+  unsigned int size;
 } MemBlockInfo;
 
 // # Physical memory allocation
@@ -143,6 +146,7 @@ void map_page(unsigned int vaddr, unsigned int paddr, MemCfg* mem_cfg) {
   PageTableEntry* pt = (PageTableEntry*)mem_cfg->staging_vaddr;
   unsigned int pte = (vaddr >> 12) & 0x3FF;
   pt[pte] = paddr | 0x3;  // 4kb page
+  invlpg(vaddr);
 }
 
 // Grabs the 4kb physical page currently associated with the given vaddr.
@@ -423,8 +427,10 @@ int log2(unsigned int v) {
   return r;
 }
 
-unsigned int alloc_vblock_of_size(unsigned int buddy_tree_vaddr,
-                                  unsigned int power_2) {
+// Finds and claims a block of VRAM of exactly 2^power_2 bytes and returns its
+// address.
+unsigned int claim_vblock_of_power_2(unsigned int buddy_tree_vaddr,
+                                     unsigned int power_2) {
   if (power_2 < PAGE_BITS) {
     return 0;
   }
@@ -440,6 +446,21 @@ unsigned int alloc_vblock_of_size(unsigned int buddy_tree_vaddr,
     }
   }
   return 0;  // Not available.
+}
+
+// Finds a block of vram of at least the given size and marks it as claimed in
+// the buddy tree. Returns the address of the VRAM and sets claimed_size (if
+// non-null) to the claimed size.
+unsigned int claim_vblock_of_size(unsigned int buddy_tree_vaddr,
+                                  unsigned int requested_size,
+                                  unsigned int* claimed_size) {
+  // Round up to the next log2 e.g. 5 bytes -> 3
+  int log2_roundup = log2(requested_size - 1) + 1;
+  unsigned int mem = claim_vblock_of_power_2(buddy_tree_vaddr, log2_roundup);
+  if (claimed_size) {
+    *claimed_size = 1 << log2_roundup;
+  }
+  return mem;
 }
 
 // Add a page table to the pd for the vaddr if it needs it.
@@ -475,19 +496,18 @@ void *malloc(unsigned int size) {
   if (size_with_meminfo < PAGE_SIZE) {
     size_with_meminfo = PAGE_SIZE;
   }
-  // Round up to the next log2 e.g. 5 bytes -> 3
-  int log2_roundup = log2(size_with_meminfo - 1) + 1;
-  unsigned int mem =
-      alloc_vblock_of_size(mem_cfg_.buddy_tree_vaddr, log2_roundup);
+  unsigned int claimed_size;
+  unsigned int mem = claim_vblock_of_size(mem_cfg_.buddy_tree_vaddr,
+                                          size_with_meminfo, &claimed_size);
   // TODO: Handle cases of >=4MB blocks
   add_page_table(mem, &mem_cfg_);
-  for (unsigned int vaddr = mem; vaddr < mem + (1 << log2_roundup); vaddr +=
-       PAGE_SIZE) {
+  for (unsigned int vaddr = mem; vaddr < mem + claimed_size;
+       vaddr += PAGE_SIZE) {
     unsigned int paddr = pop_physical(&mem_cfg_);
     map_page(vaddr, paddr, &mem_cfg_);
   }
   MemBlockInfo* info = (MemBlockInfo*)mem;
-  info->log2_size = log2_roundup;
+  info->size = claimed_size;
   return (void*)(info + 1);
 }
 
@@ -499,8 +519,7 @@ void free(void* mem) {
     return;
   }
   for (unsigned int vaddr = (unsigned int)info;
-       vaddr < (unsigned int)info + (1 << info->log2_size);
-       vaddr += PAGE_SIZE) {
+       vaddr < (unsigned int)info + (1 << info->size); vaddr += PAGE_SIZE) {
     free_buddy_vaddr(mem_cfg_.buddy_tree_vaddr, vaddr);
     unsigned int paddr = translate_vaddr(vaddr, &mem_cfg_);
     // translate_vaddr returns 0xFFFFFFFF on error.
@@ -514,7 +533,7 @@ void init_paging(multiboot_info_t* multiboot_info,
                  KernelLocation kernel_location) {
   // TODO: Translate the physical address of the mmap to the virtual address in
   // a better way.
-  unsigned long mmap_vaddr = multiboot_info->mmap_addr + 0xC0000000;
+  unsigned long mmap_vaddr = multiboot_info->mmap_addr + KERNEL_VADDR;
 
   // First grab the staging page, which is used to populate page tables and
   // other things that we don't need to keep in the vaddr space.
@@ -543,7 +562,8 @@ void init_paging(multiboot_info_t* multiboot_info,
     return;
   }
   for (unsigned int i = 0; i < multiboot_info->mods_count; ++i) {
-    module_t* module = (module_t*)(multiboot_info->mods_addr + 0xC0000000) + i;
+    module_t* module =
+        (module_t*)(multiboot_info->mods_addr + KERNEL_VADDR) + i;
     reserved_blocks[i + 1].start = module->mod_start;
     // mod_start is page aligned, but mod_end isn't so we have to round up. 
     reserved_blocks[i + 1].end = (module->mod_end + PAGE_SIZE - 1) & ~PAGE_MASK;
@@ -552,4 +572,22 @@ void init_paging(multiboot_info_t* multiboot_info,
                            NUM_MODULES + 1, mmap_vaddr,
                            multiboot_info->mmap_length, &mem_cfg_);
   make_virtual_buddy_tree(kernel_location, &mem_cfg_);
+}
+
+unsigned int map_module(module_t* module) {
+  unsigned int mod_start = module->mod_start;
+  // mod_start is page aligned, but mod_end isn't so we have to round up. 
+  unsigned int mod_end = (module->mod_end + PAGE_SIZE - 1) & ~PAGE_MASK;
+  LOG_HEX(INFO, "map_module: mod_start: ", mod_start);
+  LOG_HEX(INFO, "              mod_end: ", mod_end);
+  unsigned int module_vaddr =
+      claim_vblock_of_size(mem_cfg_.buddy_tree_vaddr, mod_end - mod_start,
+                           0 /* don't care about size */);
+  add_page_table(module_vaddr, &mem_cfg_);
+  unsigned int vaddr = module_vaddr;
+  for (unsigned int paddr = mod_start; paddr < mod_end; paddr += PAGE_SIZE) {
+    map_page(vaddr, paddr, &mem_cfg_);
+    vaddr += PAGE_SIZE;
+  }
+  return module_vaddr;
 }

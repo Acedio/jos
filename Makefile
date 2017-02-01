@@ -5,7 +5,7 @@ LDFLAGS = -melf_i386
 AS = nasm
 ASFLAGS = -f elf32
 
-all: kernel.elf
+all: kernel.elf program.flat
 
 kernel.elf: $(OBJECTS) link.ld
 		ld -T link.ld $(LDFLAGS) $(OBJECTS) -o kernel.elf
