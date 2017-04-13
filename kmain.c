@@ -108,7 +108,6 @@ int kmain(multiboot_info_t* multiboot, KernelLocation kernel_location) {
   if (module->string) {
     LOG(INFO, (char*)(module->string + 0xC0000000));
   }
-  magic_bp();
   unsigned int result = program();
   LOG_HEX(INFO, "program result = ", result);
 
