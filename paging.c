@@ -36,7 +36,7 @@ typedef struct {
 MemCfg mem_cfg_;
 
 typedef struct {
-  unsigned int size;
+  unsigned int size;  // In bytes.
 } MemBlockInfo;
 
 // # Physical memory allocation
@@ -429,6 +429,9 @@ int log2(unsigned int v) {
 
 // Finds and claims a block of VRAM of exactly 2^power_2 bytes and returns its
 // address.
+// BUG: This doesn't actually mark lower levels of the buddy tree, so if you
+// try and claim a large block and then a small block it will allocate you
+// overlapping areas of vmem.
 unsigned int claim_vblock_of_power_2(unsigned int buddy_tree_vaddr,
                                      unsigned int power_2) {
   if (power_2 < PAGE_BITS) {
@@ -487,6 +490,8 @@ void add_page_table(unsigned int vaddr, MemCfg* mem_cfg) {
   }
 }
 
+// This always allocates in 4kb chunks. We throw a MemBlockInfo at the front of
+// the allocated chunk to keep track of metadata.
 void *malloc(unsigned int size) {
   unsigned int size_with_meminfo = size + sizeof(MemBlockInfo);
   // Check for overflow.
@@ -499,7 +504,7 @@ void *malloc(unsigned int size) {
   unsigned int claimed_size;
   unsigned int mem = claim_vblock_of_size(mem_cfg_.buddy_tree_vaddr,
                                           size_with_meminfo, &claimed_size);
-  // TODO: Handle cases of >=4MB blocks
+  // TODO: Handle the case of going over a page boundary (or multiple).
   add_page_table(mem, &mem_cfg_);
   for (unsigned int vaddr = mem; vaddr < mem + claimed_size;
        vaddr += PAGE_SIZE) {
@@ -591,3 +596,10 @@ unsigned int map_module(module_t* module) {
   }
   return module_vaddr;
 }
+
+// There needs to be a struct to keep track of process metadata:
+//   - Page directory for the program (program code and data loaded at 0x0 and
+//     OS pages pre-mapped at 0xC0000000).
+//   - Stack location (starting at 0xBFFFFFFB and growing down).
+//   - Future: Allocated heap pages and a way to determine which have free space
+//     remaining in them.

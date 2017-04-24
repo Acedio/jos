@@ -62,6 +62,21 @@ void print_stats(multiboot_info_t* multiboot) {
   }
 }
 
+void test_malloc() {
+  unsigned int* a = (unsigned int*)malloc(4096 * 20);
+  LOG_HEX(INFO, "malloc'd vaddr a = ", (unsigned int)a);
+  unsigned int* b = (unsigned int*)malloc(2 * sizeof(unsigned int));
+  LOG_HEX(INFO, "malloc'd vaddr b = ", (unsigned int)b);
+  free(a);
+  LOG(INFO, "free'd a");
+  unsigned int* c = (unsigned int*)malloc(2 * sizeof(unsigned int));
+  LOG_HEX(INFO, "malloc'd vaddr c = ", (unsigned int)a);
+  free(c);
+  LOG(INFO, "free'd c");
+  free(b);
+  LOG(INFO, "free'd b");
+}
+
 int kmain(multiboot_info_t* multiboot, KernelLocation kernel_location) {
   serial_init();
   init_segmentation();
@@ -82,18 +97,7 @@ int kmain(multiboot_info_t* multiboot, KernelLocation kernel_location) {
 
   print_stats(multiboot);
 
-  unsigned int* a = (unsigned int*)malloc(2 * sizeof(unsigned int));
-  LOG_HEX(INFO, "malloc'd vaddr a = ", (unsigned int)a);
-  unsigned int* b = (unsigned int*)malloc(2 * sizeof(unsigned int));
-  LOG_HEX(INFO, "malloc'd vaddr b = ", (unsigned int)b);
-  free(a);
-  LOG(INFO, "free'd a");
-  unsigned int* c = (unsigned int*)malloc(2 * sizeof(unsigned int));
-  LOG_HEX(INFO, "malloc'd vaddr c = ", (unsigned int)a);
-  free(c);
-  LOG(INFO, "free'd c");
-  free(b);
-  LOG(INFO, "free'd b");
+  test_malloc();
 
   if (multiboot->mods_count != 1) {
     LOG_HEX(ERROR, "Unexpected number of modules: ", multiboot->mods_count);
