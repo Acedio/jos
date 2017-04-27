@@ -534,6 +534,10 @@ void free(void* mem) {
   }
 }
 
+unsigned int round_to_next_page(unsigned int addr) {
+  return (addr + PAGE_SIZE - 1) & ~PAGE_MASK;
+}
+
 void init_paging(multiboot_info_t* multiboot_info,
                  KernelLocation kernel_location) {
   // TODO: Translate the physical address of the mmap to the virtual address in
@@ -542,16 +546,22 @@ void init_paging(multiboot_info_t* multiboot_info,
 
   // First grab the staging page, which is used to populate page tables and
   // other things that we don't need to keep in the vaddr space.
-  mem_cfg_.staging_vaddr = kernel_location.virtual_end;
+  mem_cfg_.staging_vaddr = round_to_next_page(kernel_location.virtual_end);
   mem_cfg_.staging_pte   = (kernel_location.virtual_end >> 12) & 0x3FF;
-  kernel_location.virtual_end += PAGE_SIZE;
+  kernel_location.virtual_end = mem_cfg_.staging_vaddr + PAGE_SIZE;
 
-  // Map the physical page stack to the virtual space after the end of the
+  // Map the physical page stack to the first virtual page after the end of the
   // kernel. It should be able to grow this way.
   // TODO: Seems like a good idea to just store this stack as a linked list in
   // the unused RAM itself.
-  mem_cfg_.physical_page_stack_vaddr = (MemorySpan*)kernel_location.virtual_end;
-  kernel_location.virtual_end += PAGE_SIZE;
+  // Round up to the next page since the kernel end doesn't have to fall on a
+  // page boundary.
+  mem_cfg_.physical_page_stack_vaddr =
+      (MemorySpan*)round_to_next_page(kernel_location.virtual_end);
+  LOG_HEX(INFO, "page_stack_vaddr = ",
+          (unsigned int)kernel_location.virtual_end);
+  kernel_location.virtual_end =
+      (unsigned int)mem_cfg_.physical_page_stack_vaddr + PAGE_SIZE;
 
   // Space for the kernal and the modules.
   MemorySpan reserved_blocks[1 + NUM_MODULES];
@@ -570,8 +580,8 @@ void init_paging(multiboot_info_t* multiboot_info,
     module_t* module =
         (module_t*)(multiboot_info->mods_addr + KERNEL_VADDR) + i;
     reserved_blocks[i + 1].start = module->mod_start;
-    // mod_start is page aligned, but mod_end isn't so we have to round up. 
-    reserved_blocks[i + 1].end = (module->mod_end + PAGE_SIZE - 1) & ~PAGE_MASK;
+    // mod_start is page aligned, but mod_end isn't so we have to round up.
+    reserved_blocks[i + 1].end = round_to_next_page(module->mod_end);
   }
   make_free_physical_stack(reserved_blocks,
                            NUM_MODULES + 1, mmap_vaddr,
@@ -582,7 +592,7 @@ void init_paging(multiboot_info_t* multiboot_info,
 unsigned int map_module(module_t* module) {
   unsigned int mod_start = module->mod_start;
   // mod_start is page aligned, but mod_end isn't so we have to round up. 
-  unsigned int mod_end = (module->mod_end + PAGE_SIZE - 1) & ~PAGE_MASK;
+  unsigned int mod_end = round_to_next_page(module->mod_end);
   LOG_HEX(INFO, "map_module: mod_start: ", mod_start);
   LOG_HEX(INFO, "              mod_end: ", mod_end);
   unsigned int module_vaddr =

@@ -112,3 +112,8 @@ global sti
 sti:
   sti ; enable interrupts
   ret
+
+global reg_cr2
+reg_cr2:
+  mov eax, cr2
+  ret

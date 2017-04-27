@@ -1,4 +1,4 @@
-OBJECTS = loader.o kmain.o io.o fb.o serial.o log.o string.o segmentation.o gdt.o interrupts.o interrupts_asm.o pic8259.o keyboard.o paging.o paging_asm.o
+OBJECTS = loader.o kmain.o io.o fb.o serial.o log.o string.o segmentation.o gdt.o interrupts.o interrupts_asm.o pic8259.o keyboard.o paging.o paging_asm.o stdio.o
 CC = i686-elf-gcc
 CFLAGS = -c -std=gnu99 -ffreestanding -Wall -Wextra -Werror
 LDFLAGS = -melf_i386

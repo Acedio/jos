@@ -1,7 +1,16 @@
 #include "io.h"
 #include "keyboard.h"
 
-char ScancodeToAscii(unsigned char scancode) {
+#define KBD_DATA_PORT   0x60
+
+#define SCANCODE_BUFLEN 1024
+#define SCANCODE_BUFLEN_MASK (SCANCODE_BUFLEN-1)
+
+Key scancode_ringbuffer[SCANCODE_BUFLEN];
+int scancode_buffer_front;
+int scancode_buffer_back;
+
+Key KeyToAscii(Key scancode) {
   switch (scancode) {
     case 0x02:
       return '1';
@@ -179,22 +188,71 @@ char ScancodeToAscii(unsigned char scancode) {
 //    case 0x58:
 //      return 'F12) both on a 101+ key keyboard
     default:
-      return ' ';
+      return 0;
   }
 }
 
-#define KBD_DATA_PORT   0x60
+void InitKeyboard() {
+  scancode_buffer_front = 0;
+  scancode_buffer_back = 0;
+}
 
 /** read_scan_code:
  *  Reads a scan code from the keyboard
  *
  *  @return The scan code (NOT an ASCII character!)
  */
-unsigned char ReadScanCode()
+Key ReadScanCode()
 {
   return inb(KBD_DATA_PORT);
 }
 
+void PushKey() {
+  // Check to see if we're going to overflow. If so, throw away a character.
+  if (((scancode_buffer_back + 1) & SCANCODE_BUFLEN_MASK) ==
+      scancode_buffer_front) {
+    scancode_buffer_front = (scancode_buffer_front + 1) & SCANCODE_BUFLEN_MASK;
+  }
+  scancode_ringbuffer[scancode_buffer_back] = ReadScanCode();
+  scancode_buffer_back = (scancode_buffer_back + 1) & SCANCODE_BUFLEN_MASK;
+}
+
+Key PopKey() {
+  if (!HasKey()) {
+    return KEY_NONE;
+  }
+  Key scancode = scancode_ringbuffer[scancode_buffer_front];
+  scancode_buffer_front = (scancode_buffer_front + 1) & SCANCODE_BUFLEN_MASK;
+  return scancode;
+}
+
+int HasKey() {
+  return scancode_buffer_back != scancode_buffer_front;
+}
+
 char GetAscii() {
-  return ScancodeToAscii(ReadScanCode());
+  return KeyToAscii(ReadScanCode());
+}
+
+#define PRESS_MASK 0x80
+#define CODE_MASK 0x7F
+
+int IsPress(Key key) {
+  return key & PRESS_MASK;
+}
+
+KeyType GetKeyType(Key key) {
+  if (KeyToAscii(key & CODE_MASK)) {
+    return KEY_TYPE_ASCII;
+  }
+  switch (key & CODE_MASK) {
+    case 0x2a:  // LShift
+      return KEY_TYPE_SHIFT;
+    case 0x38:  // LAlt
+      return KEY_TYPE_ALT;
+    case 0x1d:  // LCtrl
+      return KEY_TYPE_CTRL;
+    default:
+      return KEY_TYPE_UNKNOWN;
+  } 
 }

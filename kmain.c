@@ -1,11 +1,13 @@
 #include "fb.h"
 #include "interrupts.h"
 #include "io.h"
+#include "keyboard.h"
 #include "log.h"
 #include "multiboot.h"
 #include "paging.h"
 #include "segmentation.h"
 #include "serial.h"
+#include "stdio.h"
 
 void logo() {
   const char* logo_str =
@@ -39,7 +41,7 @@ void logo() {
   }
 }
 
-void print_stats(multiboot_info_t* multiboot) {
+void log_multiboot(multiboot_info_t* multiboot) {
   LOG_HEX(INFO, "FLAGS: ", multiboot->flags);
   if (multiboot->flags & 0x1) {
     LOG_HEX(INFO, "MEM_UPPER: ", multiboot->mem_upper);
@@ -62,6 +64,13 @@ void print_stats(multiboot_info_t* multiboot) {
   }
 }
 
+void log_kernel_location(KernelLocation kernel_location) {
+  LOG_HEX(INFO, "kernel.physical_start: ", kernel_location.physical_start);
+  LOG_HEX(INFO, "kernel.physical_end: ", kernel_location.physical_end);
+  LOG_HEX(INFO, "kernel.virtual_start: ", kernel_location.virtual_start);
+  LOG_HEX(INFO, "kernel.virtual_end: ", kernel_location.virtual_end);
+}
+
 void test_malloc() {
   unsigned int* a = (unsigned int*)malloc(4096 * 20);
   LOG_HEX(INFO, "malloc'd vaddr a = ", (unsigned int)a);
@@ -81,21 +90,17 @@ int kmain(multiboot_info_t* multiboot, KernelLocation kernel_location) {
   serial_init();
   init_segmentation();
   init_interrupts();
+  log_multiboot(multiboot);
+  log_kernel_location(kernel_location);
   init_paging(multiboot, kernel_location);
+  //InitKeyboard();
   fb_set_color(15, 0);
   fb_clear();
   logo();
   fb_set_color(7, 0);
   fb_puts("\n\njosh@jos $ ");
 
-  LOG_HEX(INFO, "kernel.physical_start: ", kernel_location.physical_start);
-  LOG_HEX(INFO, "kernel.physical_end: ", kernel_location.physical_end);
-  LOG_HEX(INFO, "kernel.virtual_start: ", kernel_location.virtual_start);
-  LOG_HEX(INFO, "kernel.virtual_end: ", kernel_location.virtual_end);
-
   LOG(INFO, "help I'm trapped in a log factory.");
-
-  print_stats(multiboot);
 
   test_malloc();
 

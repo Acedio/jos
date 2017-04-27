@@ -1,6 +1,7 @@
 #include "interrupts.h"
 
 #include "fb.h"
+#include "io.h"
 #include "keyboard.h"
 #include "log.h"
 #include "pic8259.h"
@@ -38,25 +39,6 @@ typedef struct __attribute__((packed)) {
   unsigned int eflags;
 } StackState;
 
-void interrupt_handler(CpuState cpu, unsigned int interrupt, StackState stack) {
-  cpu.eax = cpu.eax;
-  stack.error_code = stack.error_code;
-  interrupt = interrupt;
-  char dec[12];
-  char c;
-  switch (interrupt) {
-    case 0x21:  // keyboard
-      c = GetAscii();
-      fb_write(&c, 1);
-      PicAck(0x21);
-      break;
-    default:
-      int_to_dec(interrupt, dec);
-      LOG(INFO, "interrupt#:");
-      LOG(INFO, dec);
-  }
-}
-
 void populate_interrupt_descriptor(InterruptDescriptor* id, unsigned int fn_addr) {
   id->offset_low = fn_addr & 0xFFFF;
   id->offset_high = (fn_addr >> 16) & 0xFFFF;
@@ -68,7 +50,6 @@ void populate_interrupt_descriptor(InterruptDescriptor* id, unsigned int fn_addr
 }
 
 // See interrupts_asm.s
-extern void load_idt(IDTSpec* idt);
 extern void interrupt_handler_0();
 extern void interrupt_handler_1();
 extern void interrupt_handler_2();
@@ -117,6 +98,27 @@ extern void interrupt_handler_44();
 extern void interrupt_handler_45();
 extern void interrupt_handler_46();
 extern void interrupt_handler_47();
+extern void load_idt(IDTSpec* idt);
+extern int reg_cr2();
+
+void interrupt_handler(CpuState cpu, unsigned int interrupt, StackState stack) {
+  cpu.eax = cpu.eax;
+  stack.error_code = stack.error_code;
+  interrupt = interrupt;
+  switch (interrupt) {
+    case 0x0E:  // page fault
+      LOG_HEX(ERROR, "Page fault accessing ", reg_cr2());
+      LOG_HEX(ERROR, "Error codes: ", stack.error_code);
+      magic_bp();
+      break;
+    case 0x21:  // keyboard
+      PushKey();
+      PicAck(0x21);
+      break;
+    default:
+      LOG_HEX(INFO, "interrupt#: ", interrupt);
+  }
+}
 
 void init_interrupts() {
   cli();  // disable interrupts
