@@ -23,7 +23,8 @@ typedef enum {
   KEY_TYPE_UNKNOWN
 } KeyType;
 
-Key KeyToAscii(Key key);
+char ShiftedKeyToAscii(Key key);
+char KeyToAscii(Key key);
 
 int IsPress(Key key);
 KeyType GetKeyType(Key key);

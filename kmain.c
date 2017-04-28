@@ -93,7 +93,7 @@ int kmain(multiboot_info_t* multiboot, KernelLocation kernel_location) {
   log_multiboot(multiboot);
   log_kernel_location(kernel_location);
   init_paging(multiboot, kernel_location);
-  //InitKeyboard();
+  InitKeyboard();
   fb_set_color(15, 0);
   fb_clear();
   logo();
@@ -119,6 +119,10 @@ int kmain(multiboot_info_t* multiboot, KernelLocation kernel_location) {
   }
   unsigned int result = program();
   LOG_HEX(INFO, "program result = ", result);
+
+  while (1) {
+    putc(getc());
+  }
 
   return 0;
 }

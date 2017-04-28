@@ -24,7 +24,7 @@ int fgetc(FILE* stream) {
     if (type == KEY_TYPE_ASCII) { 
       if (IsPress(key)) {
         // Convert to lowercase if necessary and return.
-        return KeyToAscii(key) + (shift ? 0 : ('a' - 'A'));
+        return shift ? ShiftedKeyToAscii(key) : KeyToAscii(key);
       }
     } else if (type == KEY_TYPE_SHIFT) {
       // HACK: Note that the meta key handling won't handle releasing one key
