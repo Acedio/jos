@@ -545,17 +545,16 @@ void init_paging(multiboot_info_t* multiboot_info,
   unsigned long mmap_vaddr = multiboot_info->mmap_addr + KERNEL_VADDR;
 
   // First grab the staging page, which is used to populate page tables and
-  // other things that we don't need to keep in the vaddr space.
+  // other things that we don't need to keep in the vaddr space. Round up to the
+  // next page since the kernel end doesn't have to fall on a page boundary.
   mem_cfg_.staging_vaddr = round_to_next_page(kernel_location.virtual_end);
-  mem_cfg_.staging_pte   = (kernel_location.virtual_end >> 12) & 0x3FF;
+  mem_cfg_.staging_pte   = (mem_cfg_.staging_vaddr >> 12) & 0x3FF;
   kernel_location.virtual_end = mem_cfg_.staging_vaddr + PAGE_SIZE;
 
   // Map the physical page stack to the first virtual page after the end of the
   // kernel. It should be able to grow this way.
   // TODO: Seems like a good idea to just store this stack as a linked list in
   // the unused RAM itself.
-  // Round up to the next page since the kernel end doesn't have to fall on a
-  // page boundary.
   mem_cfg_.physical_page_stack_vaddr =
       (MemorySpan*)round_to_next_page(kernel_location.virtual_end);
   LOG_HEX(INFO, "page_stack_vaddr = ",
