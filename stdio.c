@@ -10,7 +10,7 @@ int fgetc(FILE* stream) {
   //static int alt = 0;
 
   if (stream != stdin) {
-    LOG_HEX(ERROR, "Unsupported stream: ", (unsigned int)stream);
+    LOG_HEX(ERROR, "Unsupported stream: ", stream);
   }
 
   while (1) {

@@ -10,7 +10,8 @@ void (*log_puts)(const char*) = &fb_puts;
 void (*log_puts)(const char*) = &serial_puts;
 #endif
 
-void log_message_no_newline(int level, const char* filename, int line, const char* text) {
+void log_message_no_newline(int level, const char* filename, int line,
+                            const char* text) {
   switch (level) {
     case INFO:
       log_puts("INFO:");

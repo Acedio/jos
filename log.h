@@ -7,8 +7,10 @@
 
 #define LOG(level, text) log_message(level, __FILE__, __LINE__, text)
 
-#define LOG_INT(level, text, i) log_int(level, __FILE__, __LINE__, text, i)
-#define LOG_HEX(level, text, i) log_hex(level, __FILE__, __LINE__, text, i)
+#define LOG_INT(level, text, i) \
+    log_int(level, __FILE__, __LINE__, text, (int)(i))
+#define LOG_HEX(level, text, i) \
+    log_hex(level, __FILE__, __LINE__, text, (unsigned int)(i))
 
 // Must call serial_init() before calling any of these functions.
 void log_message(int level, const char* filename, int line, const char* text);

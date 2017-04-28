@@ -73,13 +73,13 @@ void log_kernel_location(KernelLocation kernel_location) {
 
 void test_malloc() {
   unsigned int* a = (unsigned int*)malloc(4096 * 20);
-  LOG_HEX(INFO, "malloc'd vaddr a = ", (unsigned int)a);
+  LOG_HEX(INFO, "malloc'd vaddr a = ", a);
   unsigned int* b = (unsigned int*)malloc(2 * sizeof(unsigned int));
-  LOG_HEX(INFO, "malloc'd vaddr b = ", (unsigned int)b);
+  LOG_HEX(INFO, "malloc'd vaddr b = ", b);
   free(a);
   LOG(INFO, "free'd a");
   unsigned int* c = (unsigned int*)malloc(2 * sizeof(unsigned int));
-  LOG_HEX(INFO, "malloc'd vaddr c = ", (unsigned int)a);
+  LOG_HEX(INFO, "malloc'd vaddr c = ", a);
   free(c);
   LOG(INFO, "free'd c");
   free(b);
