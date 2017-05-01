@@ -5,7 +5,8 @@
 #include "log.h"
 
 int fgetc(FILE* stream) {
-  static int shift = 0;
+  static int lshift = 0;
+  static int rshift = 0;
   //static int ctrl = 0;
   //static int alt = 0;
 
@@ -14,26 +15,29 @@ int fgetc(FILE* stream) {
   }
 
   while (1) {
-    while (!HasKey()) {
+    while (!HasScancode()) {
       // Wait for input.
     }
 
-    Key key = PopKey();
-    KeyType type = GetKeyType(key);
+    Scancode scancode = PopScancode();
+    Key key = GetKey(scancode);
 
-    if (type == KEY_TYPE_ASCII) { 
-      if (IsPress(key)) {
-        // Convert to lowercase if necessary and return.
-        return shift ? ShiftedKeyToAscii(key) : KeyToAscii(key);
+    if (KeyIsAscii(key)) { 
+      if (IsPress(scancode)) {
+        // Shift if necessary and return.
+        return (lshift || rshift) ? ShiftedScancodeToAscii(scancode)
+                                  : ScancodeToAscii(scancode);
       }
-    } else if (type == KEY_TYPE_SHIFT) {
+    } else if (key == KEY_LSHIFT) {
       // HACK: Note that the meta key handling won't handle releasing one key
       // after both left and right keys were held.
-      shift = IsPress(key);
-    } else if (type == KEY_TYPE_ALT) {
-      //alt = IsPress(key);
-    } else if (type == KEY_TYPE_CTRL) {
-      //ctrl = IsPress(key);
+      lshift = IsPress(scancode);
+    } else if (key == KEY_RSHIFT) {
+      rshift = IsPress(scancode);
+    } else if (key == KEY_LALT) {
+      //alt = IsPress(scancode);
+    } else if (key == KEY_LCTRL) {
+      //ctrl = IsPress(scancode);
     }
   }
 
