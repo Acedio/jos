@@ -112,7 +112,7 @@ void interrupt_handler(CpuState cpu, unsigned int interrupt, StackState stack) {
       magic_bp();
       break;
     case 0x21:  // keyboard
-      PushKey();
+      PushScancode();
       PicAck(0x21);
       break;
     default:
