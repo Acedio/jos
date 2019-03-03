@@ -1,14 +1,14 @@
 OBJECTS = loader.o kmain.o io.o fb.o serial.o log.o string.o segmentation.o gdt.o interrupts.o interrupts_asm.o pic8259.o keyboard.o paging.o paging_asm.o stdio.o
-CC = i686-elf-gcc
-CFLAGS = -c -std=gnu99 -ffreestanding -Wall -Wextra -Werror
-LDFLAGS = -melf_i386
+CC = gcc
+CFLAGS = -c -m32 -nostdlib -fno-stack-protector -std=gnu99 -ffreestanding -Wall -Wextra -Werror
+LDFLAGS = -T link.ld -melf_i386
 AS = nasm
 ASFLAGS = -f elf32
 
 all: kernel.elf program.flat
 
 kernel.elf: $(OBJECTS) link.ld
-		ld -T link.ld $(LDFLAGS) $(OBJECTS) -o kernel.elf
+		ld $(LDFLAGS) $(OBJECTS) -o kernel.elf
 
 jos.iso: kernel.elf program.flat
 		cp kernel.elf iso/boot/kernel.elf
